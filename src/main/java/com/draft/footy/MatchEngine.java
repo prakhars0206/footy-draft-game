@@ -45,11 +45,18 @@ public final class MatchEngine {
     }
 
     /** Weighted pick of a scorer (attack weights) or assister (assist weights), excluding `exclude`. */
+
     private Player pick(Xi team, boolean scoring, Random rng, Player exclude) {
         double total = 0;
         for (Xi.Slot s : team.slots) {
             if (s.player().equals(exclude)) continue;
-            total += scoring ? s.line().attackWeight() : s.line().assistWeight();
+
+            //  Multiply base positional weight by the player's rating percentage
+            double baseWeight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+            double ratingModifier = s.player().overall() / 100.0;
+
+            // We square the modifier just to give high-rated players a slightly sharper advantage
+            total += baseWeight * (ratingModifier * ratingModifier);
         }
 
         if (total <= 0) return team.slots.get(0).player(); // Fallback to first attacker
@@ -59,7 +66,9 @@ public final class MatchEngine {
         for (Xi.Slot s : team.slots) {
             if (s.player().equals(exclude)) continue;
 
-            double weight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+            double baseWeight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+            double ratingModifier = s.player().overall() / 100.0;
+            double weight = baseWeight * (ratingModifier * ratingModifier);
 
             // Skip players who mathematically cannot score/assist
             if (weight <= 0) continue;
@@ -68,7 +77,7 @@ public final class MatchEngine {
             if (roll <= 0) return s.player();
         }
 
-        // Failsafe: return the first attacker instead of the keeper
+        // Failsafe
         return team.slots.get(0).player();
     }
 

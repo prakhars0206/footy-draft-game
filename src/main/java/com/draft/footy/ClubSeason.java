@@ -23,14 +23,30 @@ public final class ClubSeason {
 
     public String label() { return club + " " + season; }
 
-    /** Finds the highest-rated XI across ALL available formations and caches it. */
+    /** Finds the XI with the MOST natural fits across all formations. Uses overall as a tiebreaker. */
     public Xi optimalXi() {
         if (cachedOptimalXi == null) {
             Xi best = null;
+            int bestNaturalCount = -1;
+
             for (Formation f : Formation.values()) {
                 Xi candidate = buildXi(f);
-                if (best == null || candidate.overall() > best.overall()) {
+
+                // Count how many drafted players are playing a natural position
+                int naturalCount = 0;
+                for (Xi.Slot s : candidate.slots) {
+                    if (s.player().canPlay(s.position())) {
+                        naturalCount++;
+                    }
+                }
+
+                // If it has MORE natural fits, or the SAME natural fits but a higher overall -> it's the new best
+                if (best == null ||
+                        naturalCount > bestNaturalCount ||
+                        (naturalCount == bestNaturalCount && candidate.overall() > best.overall())) {
+
                     best = candidate;
+                    bestNaturalCount = naturalCount;
                 }
             }
             cachedOptimalXi = best;

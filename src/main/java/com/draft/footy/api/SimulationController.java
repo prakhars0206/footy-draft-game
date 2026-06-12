@@ -24,7 +24,7 @@ public class SimulationController {
 
     public SimulationController(SimulationService service) { this.service = service; }
 
-    public record TeamRow(int pos, String team, int points, int won, int drawn, int lost, int gd, boolean you) {}
+    public record TeamRow(int pos, String team, int points, int won, int drawn, int lost, int gd, boolean you, List<String> startingXI) {}
     public record StatRow(String player, String team, int value) {}
     public record OddsView(int expectedPoints, double winLeague, double top4, double relegation) {}
     public record SeasonView(
@@ -49,7 +49,13 @@ public class SimulationController {
         List<TeamRow> table = new java.util.ArrayList<>();
         for (int i = 0; i < res.table().size(); i++) {
             var s = res.table().get(i);
-            table.add(new TeamRow(i + 1, s.team.name, s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == xi));
+
+            // MAP THE STARTING XI TO STRINGS (e.g. "ST: L. Suárez (88)")
+            List<String> lineup = s.team.slots.stream()
+                    .map(slot -> slot.position() + ": " + slot.player().name() + " (" + slot.player().overall() + ")")
+                    .toList();
+
+            table.add(new TeamRow(i + + 1, s.team.name, s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == xi, lineup));
         }
 
         return new SeasonView(
