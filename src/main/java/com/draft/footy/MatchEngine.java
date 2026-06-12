@@ -51,13 +51,24 @@ public final class MatchEngine {
             if (s.player().equals(exclude)) continue;
             total += scoring ? s.line().attackWeight() : s.line().assistWeight();
         }
-        if (total <= 0) return team.slots.get(0).player();
+
+        if (total <= 0) return team.slots.get(0).player(); // Fallback to first attacker
+
         double roll = rng.nextDouble() * total;
+
         for (Xi.Slot s : team.slots) {
             if (s.player().equals(exclude)) continue;
-            roll -= scoring ? s.line().attackWeight() : s.line().assistWeight();
+
+            double weight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+
+            // Skip players who mathematically cannot score/assist
+            if (weight <= 0) continue;
+
+            roll -= weight;
             if (roll <= 0) return s.player();
         }
+
+        // Failsafe: return the first attacker instead of the keeper
         return team.slots.get(0).player();
     }
 

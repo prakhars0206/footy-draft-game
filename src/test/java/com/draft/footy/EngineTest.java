@@ -56,7 +56,7 @@ class EngineTest {
     private int simulatePoints(List<ClubSeason> clubs, List<Player> pool, int target, long seed) {
         Xi xi = buildXi(pool, target);
         Random rng = new Random(seed);
-        List<Xi> opp = new OpponentPyramid(clubs, F).generate(rng);
+        List<Xi> opp = new OpponentPyramid(clubs).generate(rng);
         return new SeasonSimulator().simulate(xi, opp, rng).userStanding().points();
     }
 
@@ -87,7 +87,7 @@ class EngineTest {
         var clubs = clubs(); var pool = pool(clubs);
         Xi xi = buildXi(pool, 85);
         Random rng = new Random(3L);
-        var res = new SeasonSimulator().simulate(xi, new OpponentPyramid(clubs, F).generate(rng), rng);
+        var res = new SeasonSimulator().simulate(xi, new OpponentPyramid(clubs).generate(rng), rng);
         assertEquals(20, res.table().size(), "league should have 20 teams");
         var u = res.userStanding();
         assertEquals(38, u.won + u.drawn + u.lost, "user should play 38 games");

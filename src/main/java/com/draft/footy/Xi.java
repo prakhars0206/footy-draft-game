@@ -12,7 +12,7 @@ public final class Xi {
 
     public Xi(String name) { this.name = name; }
 
-    void add(String position, Player p) { slots.add(new Slot(position, Line.of(position), p)); }
+    public void add(String position, Player p) { slots.add(new Slot(position, Line.of(position), p)); }
 
     private double lineMean(Line line) {
         return slots.stream().filter(s -> s.line() == line)

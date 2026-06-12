@@ -25,10 +25,8 @@ public final class OpponentPyramid {
     static final int OPPONENTS   = LEAGUE_SIZE - 1;
 
     private final List<ClubSeason> pool;
-    private final Formation formation;
-
-    public OpponentPyramid(List<ClubSeason> pool, Formation formation) {
-        this.pool = pool; this.formation = formation;
+    public OpponentPyramid(List<ClubSeason> pool) {
+        this.pool = pool;
     }
 
     public List<Xi> generate(Random rng) {
@@ -48,21 +46,21 @@ public final class OpponentPyramid {
         for (int i = 0; i < TIERS.size(); i++) {
             Tier t = TIERS.get(i);
             List<ClubSeason> band = pool.stream()
-                .filter(cs -> { int s = cs.strength(formation); return s >= t.min() && s <= t.max(); })
-                .sorted(Comparator.comparingInt((ClubSeason cs) -> cs.strength(formation)).reversed())
-                .toList();
+                    .filter(cs -> { int s = cs.optimalStrength(); return s >= t.min() && s <= t.max(); })
+                    .sorted(Comparator.comparingInt((ClubSeason cs) -> cs.optimalStrength()).reversed())
+                    .toList();
             int placed = 0, guard = 0;
             while (placed < counts[i] && guard < 200 && !band.isEmpty()) {
                 ClubSeason cs = band.get(rng.nextInt(band.size()));
                 guard++;
-                if (picked.add(cs.label())) { opponents.add(cs.bestXi(formation)); placed++; }
+                if (picked.add(cs.label())) { opponents.add(cs.optimalXi()); placed++; }
             }
         }
         // Safety: top up to 19 from anywhere if some bands were thin.
         int guard = 0;
         while (opponents.size() < OPPONENTS && !pool.isEmpty() && guard++ < 500) {
             ClubSeason cs = pool.get(rng.nextInt(pool.size()));
-            if (picked.add(cs.label())) opponents.add(cs.bestXi(formation));
+            if (picked.add(cs.label())) opponents.add(cs.optimalXi());
         }
         return opponents.subList(0, Math.min(OPPONENTS, opponents.size()));
     }

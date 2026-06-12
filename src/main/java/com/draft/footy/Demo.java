@@ -22,7 +22,7 @@ public final class Demo {
         // ---------- One detailed example season (a strong ~90 XI) ----------
         Xi userXi = buildXi(pool, 90, "Your XI");
         Random rng = new Random(42);
-        List<Xi> opponents = new OpponentPyramid(clubs, FORMATION).generate(rng);
+        List<Xi> opponents = new OpponentPyramid(clubs).generate(rng);
         Projection.Odds odds = Projection.odds(userXi.overall());
         SeasonSimulator.SeasonResult res = new SeasonSimulator().simulate(userXi, opponents, rng);
 
@@ -64,7 +64,7 @@ public final class Demo {
             long totalPts = 0; int unbeaten = 0; int perfect = 0; int wins38 = 0;
             for (int s = 0; s < N; s++) {
                 Random r = new Random(1000L + s);
-                List<Xi> opp = new OpponentPyramid(clubs, FORMATION).generate(r);
+                List<Xi> opp = new OpponentPyramid(clubs).generate(rng);
                 SeasonSimulator.Standing st = new SeasonSimulator().simulate(xi, opp, r).userStanding();
                 totalPts += st.points();
                 if (st.lost == 0) unbeaten++;

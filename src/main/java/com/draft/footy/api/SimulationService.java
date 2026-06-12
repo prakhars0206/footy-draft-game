@@ -37,7 +37,7 @@ public class SimulationService {
     public SeasonSimulator.SeasonResult simulateDemo(int targetOverall, Formation formation, long seed) {
         Xi userXi = buildXi(targetOverall, formation);
         Random rng = new Random(seed);
-        List<Xi> opponents = new OpponentPyramid(clubs, formation).generate(rng);
+        List<Xi> opponents = new OpponentPyramid(clubs).generate(rng);
         return new SeasonSimulator().simulate(userXi, opponents, rng);
     }
 
