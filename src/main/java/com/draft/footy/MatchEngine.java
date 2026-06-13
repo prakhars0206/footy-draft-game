@@ -9,9 +9,9 @@ public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
     static final double BASE_GOALS = 1.21;  // league-average goals per team in a balanced game
-    static final double SCALE      = 15.9;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double SCALE      = 16.5;  // how sharply strength gaps translate to goals (larger = gentler)
     static final double HOME_ADV   = 4.5;   // home edge, in overall-rating points
-    static final double MAX_LAMBDA = 4.2;   // clamp to avoid absurd blowouts
+    static final double MAX_LAMBDA = 4.0;   // clamp to avoid absurd blowouts
 
     // Dixon-Coles low-score correction: independent Poisson under-predicts 0-0/1-1 draws (scorelines are
     // correlated). RHO < 0 shifts mass from 1-0/0-1 into 0-0/1-1, lifting the draw rate to a realistic band.
@@ -27,9 +27,16 @@ public final class MatchEngine {
         public boolean awayCleanSheet() { return homeGoals == 0; }
     }
 
-    public Result play(Xi home, Xi away, Random rng) {
-        double lambdaHome = lambda(home.attackRating(), away.defenceRating(), +HOME_ADV);
-        double lambdaAway = lambda(away.attackRating(), home.defenceRating(), -HOME_ADV);
+    public Result play(Xi home, Xi away, Random rng) { return play(home, away, 0, 0, rng); }
+
+    /**
+     * Play with a per-season "form" adjustment on each side (a team in form attacks better AND defends better
+     * all year). Mean-zero across teams, so it leaves the long-run average alone but makes any single season
+     * swing — the source of genuine over/under-performance drama.
+     */
+    public Result play(Xi home, Xi away, double homeForm, double awayForm, Random rng) {
+        double lambdaHome = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, +HOME_ADV);
+        double lambdaAway = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, -HOME_ADV);
         int[] score = sampleScore(lambdaHome, lambdaAway, rng);
         int hg = score[0], ag = score[1];
 

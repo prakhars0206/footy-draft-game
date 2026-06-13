@@ -10,6 +10,13 @@ import java.util.Random;
 /** Simulates an entire league season: every team plays every other home and away, stats tracked for all players. */
 public final class SeasonSimulator {
 
+    /**
+     * Season-form spread (in overall-rating points). Each team draws a mean-zero gaussian form for the whole
+     * season — leaves the long-run average (and the projection) intact while making a single season swing, so
+     * teams genuinely over/under-perform. The drama dial: larger = more upsets/surprises.
+     */
+    static final double FORM_SIGMA = 2.0;
+
     private final MatchEngine engine = new MatchEngine();
 
     public static final class Standing {
@@ -56,6 +63,10 @@ public final class SeasonSimulator {
             stats.put(t, m);
         }
 
+        // Each team's season form — a good/bad campaign, drawn once (seeded, so still reproducible).
+        Map<Xi, Double> form = new HashMap<>();
+        for (Xi t : teams) form.put(t, rng.nextGaussian() * FORM_SIGMA);
+
         // User-team match outcomes in matchday order, for streak / biggest-win extraction.
         List<int[]> userScores = new ArrayList<>(); // {for, against}
         List<Matchday> matchdays = new ArrayList<>();
@@ -66,7 +77,7 @@ public final class SeasonSimulator {
             List<MatchResult> results = new ArrayList<>();
             for (int[] fixture : round) {
                 Xi home = teams.get(fixture[0]), away = teams.get(fixture[1]);
-                MatchEngine.Result r = engine.play(home, away, rng);
+                MatchEngine.Result r = engine.play(home, away, form.get(home), form.get(away), rng);
                 record(standings.get(home), r.homeGoals(), r.awayGoals());
                 record(standings.get(away), r.awayGoals(), r.homeGoals());
 

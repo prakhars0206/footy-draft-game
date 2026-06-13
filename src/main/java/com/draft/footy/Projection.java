@@ -12,7 +12,7 @@ public final class Projection {
      * range (a runaway champion tops near 100, a doomed side bottoms out in the teens).
      */
     public static int expectedPoints(int overall) {
-        double pts = 3.45 * overall - 217.0;
+        double pts = 3.3 * overall - 206.0;
         return (int) Math.round(Math.max(14, Math.min(100, pts)));
     }
 
