@@ -55,7 +55,7 @@ public class SimulationController {
                     .map(slot -> slot.position() + ": " + slot.player().name() + " (" + slot.player().overall() + ")")
                     .toList();
 
-            table.add(new TeamRow(i + + 1, s.team.name, s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == xi, lineup));
+            table.add(new TeamRow(i + 1, s.team.name, s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == xi, lineup));
         }
 
         return new SeasonView(

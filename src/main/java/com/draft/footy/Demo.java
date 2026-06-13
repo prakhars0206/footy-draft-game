@@ -64,7 +64,7 @@ public final class Demo {
             long totalPts = 0; int unbeaten = 0; int perfect = 0; int wins38 = 0;
             for (int s = 0; s < N; s++) {
                 Random r = new Random(1000L + s);
-                List<Xi> opp = new OpponentPyramid(clubs).generate(rng);
+                List<Xi> opp = new OpponentPyramid(clubs).generate(r);
                 SeasonSimulator.Standing st = new SeasonSimulator().simulate(xi, opp, r).userStanding();
                 totalPts += st.points();
                 if (st.lost == 0) unbeaten++;

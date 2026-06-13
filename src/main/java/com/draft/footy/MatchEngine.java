@@ -8,10 +8,10 @@ import java.util.Random;
 public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
-    static final double BASE_GOALS = 1.32;  // league-average goals per team in a balanced game
-    static final double SCALE      = 15.5;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double BASE_GOALS = 1.25;  // league-average goals per team in a balanced game
+    static final double SCALE      = 16;  // how sharply strength gaps translate to goals (larger = gentler)
     static final double HOME_ADV   = 4.5;   // home edge, in overall-rating points
-    static final double MAX_LAMBDA = 4.7;   // clamp to avoid absurd blowouts
+    static final double MAX_LAMBDA = 4.5;   // clamp to avoid absurd blowouts
 
     public record GoalEvent(Player scorer, Player assist, int minute, boolean home) {}
 
@@ -52,7 +52,8 @@ public final class MatchEngine {
             if (s.player().equals(exclude)) continue;
 
             //  Multiply base positional weight by the player's rating percentage
-            double baseWeight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+            double baseWeight = scoring ? ScoringWeights.of(s.position()).goal()
+                    : ScoringWeights.of(s.position()).assist();
             double ratingModifier = s.player().overall() / 100.0;
 
             // We square the modifier just to give high-rated players a slightly sharper advantage
@@ -66,7 +67,8 @@ public final class MatchEngine {
         for (Xi.Slot s : team.slots) {
             if (s.player().equals(exclude)) continue;
 
-            double baseWeight = scoring ? s.line().attackWeight() : s.line().assistWeight();
+            double baseWeight = scoring ? ScoringWeights.of(s.position()).goal()
+                    : ScoringWeights.of(s.position()).assist();
             double ratingModifier = s.player().overall() / 100.0;
             double weight = baseWeight * (ratingModifier * ratingModifier);
 
