@@ -39,7 +39,8 @@ public class DraftRunController {
     public record RunStateView(String runId, String formation, String difficulty, String showRatings,
                                String draftMode, String playerRatings, String leagueScope, String status,
                                long seed, int rerollsRemaining, int slotsRemaining,
-                               StrengthView strength, List<SlotView> slots, SpinInfo currentSpin) { }
+                               StrengthView strength, List<SlotView> slots, SpinInfo currentSpin,
+                               SeasonViewMapper.OddsView projection) { }
     public record SpinInfo(String club, String season, String league) { }
     public record SquadPlayerView(int sofifaId, String name, String nation, List<String> positions,
                                   RatingView rating, List<String> eligibleSlots) { }
@@ -106,7 +107,16 @@ public class DraftRunController {
         return new RunStateView(run.getId(), run.getFormation(), run.getDifficulty().name(),
             run.getShowRatings().name(), run.getDraftMode().name(), run.getPlayerRatings().name(),
             run.getLeagueScope().name(), run.getStatus().name(), run.getSeed(),
-            run.getRerollsRemaining(), run.openSlots().size(), strength(run), slots, spin);
+            run.getRerollsRemaining(), run.openSlots().size(), strength(run), slots, spin, projection(run));
+    }
+
+    /** The bookies' pre-season projection — shown once the XI is complete (the §6 dual-layer reveal). */
+    private SeasonViewMapper.OddsView projection(DraftRunEntity run) {
+        if (!run.isComplete()) return null;
+        Xi xi = new Xi("proj");
+        for (DraftSlotEntity s : run.getSlots()) xi.add(s.getPosition(), s.toPlayer());
+        Projection.Odds o = Projection.odds(xi.overall());
+        return new SeasonViewMapper.OddsView(o.expectedPoints(), o.winLeague(), o.top4(), o.relegation());
     }
 
     private SpinView toSpin(DraftRunEntity run, ClubSeason squad) {

@@ -29,6 +29,9 @@ curl -X POST localhost:8080/api/runs/{id}/simulate                              
 
 mvn test                                              # engine invariants
 
+# Frontend (React scout-dossier SPA) — needs the backend running on :8080
+cd frontend && npm install && npm run dev             # http://localhost:5173 (proxies /api -> :8080)
+
 # engine-only proof, no Maven (defaults to data/male_players_all.csv):
 javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.footy.Demo
 ```
@@ -50,6 +53,7 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
     - `GameCatalog` — shared loaded pool (`clubs`/`pool`/`primeIndex` + `eligibleClubSeasons(scope, league, era…)`); `@PostConstruct` after `DataSeeder`, race-free. Consumed by both services.
     - `SimulationController` (`GET /api/season/demo`, `&prime=true`) — stateless demo. `SeasonViewMapper` renders the shared season JSON for both demo and draft (and carries the `you`-flag fix — compares against `result.userStanding().team`).
     - `DraftRunController` / `DraftRunService` — **stateful draft flow** (§3/§5B/§16): `POST /api/runs` → `/{id}/spin` → `/{id}/draft` → `/{id}/move` → `/{id}/simulate`, server-authoritative, seeded for replay. Ratings render per `ShowRatings`: ON exact / SCOUT range only / OFF hidden — **the true overall never reaches the client in SCOUT/OFF**, and live strength is gated to ON so the aggregate can't leak it. *(World Draft + Squad First wired; Position First + Classic/§5b rejected at create for now.)*
+- `frontend/` — **React scout-dossier SPA** (Vite + React + TS + Tailwind v4 + Framer Motion), tactical intel-terminal theme. View machine `setup → draft → results` (`App.tsx`); typed client `src/api.ts`; `src/theme.ts` (line colours + per-formation pitch coords + Scout rating renderer); `src/screens/` + `src/components/PitchView`. Talks to the backend via a Vite `/api` proxy. See `frontend/README.md`.
 
 ## Invariants — do not break these
 
@@ -89,7 +93,8 @@ On the locked **players_22** reference: 89 → ~92 pts (projected 92), 90 → ~9
 - **Phase 2 (in progress):**
     - ✅ **Stateful `DraftRun` REST resource** — `POST /api/runs` → `/{id}/spin` `/draft` `/move` `/simulate`, persisted in H2, server-authoritative, seed-replayable (`DraftRunController`/`DraftRunService`). World Draft + Squad First; natural-positions-only placement; difficulty rerolls + free-reroll dead-end safeguard; Prime/Career; era filter.
     - ✅ **Scout fuzzy-ratings** (headline) — `ShowRatings` ON/SCOUT/OFF at the DTO boundary; true overall stripped in SCOUT/OFF, live strength gated to ON (`ScoutRatings`, deterministic from `(sofifaId, runSeed)`).
-    - ⏳ **React scout-dossier frontend** (Vite + React + TS + Tailwind) — next pass; **must be a distinctive, fun UI** (scout-dossier identity §9), not a slot-machine reskin.
+    - ✅ **React scout-dossier frontend — draft screen** (Vite + React + TS + Tailwind v4 + Framer Motion), tactical intel-terminal theme. Playable loop: mission-config setup → spin/place onto a pitch + live strength + reroll/move → simulate → debrief. Scout ratings render as ranges/redaction; juicy reveal animations. See `frontend/`. *(Draft-screen-first scope; minimal setup + basic results.)*
+    - ⏳ **Frontend polish** (next pass): richer setup (era slider, league picker), full match log + share on results, Continue-Draft resume, deeper animation.
     - ⏳ **Position First** draft mode; **Classic** single-league + §5b "global team in one real league" (needs real-league opponents, not the pyramid) — later passes; rejected at `create` for now.
 - **Phase 3:** AI legends pack (icons retired pre-2014, absent from FIFA data); async LLM flavor text (never block the results endpoint).
 

@@ -29,6 +29,7 @@ public final class SeasonSimulator {
     public record SeasonResult(
         List<Standing> table, Standing userStanding, int userPosition,
         List<PlayerStat> topScorers, List<PlayerStat> topAssists, List<PlayerStat> topCleanSheets,
+        PlayerStat playerOfSeason,
         int biggestWinFor, int biggestWinAgainst, int longestWinStreak) {}
 
     public SeasonResult simulate(Xi userXi, List<Xi> opponents, Random rng) {
@@ -78,12 +79,25 @@ public final class SeasonSimulator {
 
         return new SeasonResult(table, user, pos,
             topBy(stats, s -> s.goals), topBy(stats, s -> s.assists), topBy(stats, s -> s.cleanSheets),
+            playerOfSeason(stats),
             biggest(userScores, true), biggest(userScores, false), longestStreak(userScores));
     }
 
     private void record(Standing s, int gf, int ga) {
         s.played++; s.gf += gf; s.ga += ga;
         if (gf > ga) s.won++; else if (gf == ga) s.drawn++; else s.lost++;
+    }
+
+    /** Player of the Season — best all-round contribution across the whole league (goals + creation + clean sheets). */
+    private PlayerStat playerOfSeason(Map<Xi, Map<Integer, PlayerStat>> stats) {
+        PlayerStat best = null;
+        double bestScore = -1;
+        for (Map<Integer, PlayerStat> m : stats.values())
+            for (PlayerStat s : m.values()) {
+                double score = s.goals * 4 + s.assists * 3 + s.cleanSheets * 2.0;
+                if (score > bestScore) { bestScore = score; best = s; }
+            }
+        return best;
     }
 
     private List<PlayerStat> topBy(Map<Xi, Map<Integer, PlayerStat>> stats, java.util.function.ToIntFunction<PlayerStat> key) {
