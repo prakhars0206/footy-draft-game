@@ -18,6 +18,15 @@ A from-scratch football draft + season-simulation game (personal/educational; in
 mvn spring-boot:run                                   # API on :8080 (loads data/male_players_all.csv)
 curl "http://localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42"
 curl "http://localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42&prime=true"  # Prime Mode (career-best)
+
+# Stateful draft flow (Phase 2): create -> spin -> draft x11 -> simulate
+curl -X POST localhost:8080/api/runs -H 'Content-Type: application/json' \
+  -d '{"formation":"4-3-3","showRatings":"SCOUT","leagueScope":"WORLD","seed":777}'         # -> {runId, ...}
+curl -X POST localhost:8080/api/runs/{id}/spin                                              # squad w/ Scout ranges
+curl -X POST localhost:8080/api/runs/{id}/draft -H 'Content-Type: application/json' \
+  -d '{"slotPosition":"GK","sofifaId":123}'                                                 # natural positions only
+curl -X POST localhost:8080/api/runs/{id}/simulate                                          # full SeasonView
+
 mvn test                                              # engine invariants
 
 # engine-only proof, no Maven (defaults to data/male_players_all.csv):
@@ -35,8 +44,12 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
     - `ScoringWeights` — per-position goal/assist propensity. **Attribution only — does NOT affect scorelines or points**, so tune freely against the leaderboards.
     - `SeasonSimulator` — 380-game round-robin, **league-wide** stat ledger keyed per (team, player), table, awards.
     - `Projection` — Layer-1 "bookies" expected points + finish odds.
-- `com.draft.footy.persistence` — JPA layer (cert practice): relational `ClubSeasonEntity` ↔ `PlayerEntity` (positions in an ordered join table), `ClubSeasonRepository` (derived `findByLeague`/`findByLeagueAndSeason` + a `findAllWithPlayers` fetch-join), `EngineMapper` (entity ⇄ engine record, both ways), `DataSeeder` (`@PostConstruct`: CSV → entities → H2). Keeps JPA out of the pure engine.
-- `com.draft.footy.api` — Spring layer (`@RestController` / `@Service`) wrapping the engine. `SimulationService` `@DependsOn("dataSeeder")` and loads the engine pool from the repo in `@PostConstruct` (race-free: both run during context refresh, before the web server serves). `GET /api/season/demo` returns a season as JSON, including each team's lineup; `&prime=true` applies career-best ratings to the user XI.
+    - Run-config enums (`Difficulty`/`ShowRatings`/`DraftMode`/`PlayerRatings`/`LeagueScope`/`RunStatus`) + `ScoutRatings` — Scout fuzzy band (§8), **deterministic from `(sofifaId, runSeed)`**, asymmetric so it can't be reverse-averaged.
+- `com.draft.footy.persistence` — JPA layer (cert practice): relational `ClubSeasonEntity` ↔ `PlayerEntity` (positions in an ordered join table), `ClubSeasonRepository` (derived `findByLeague`/`findByLeagueAndSeason` + a `findAllWithPlayers` fetch-join), `EngineMapper` (entity ⇄ engine record, both ways), `DataSeeder` (`@PostConstruct`: CSV → entities → H2). **DraftRun** aggregate: `DraftRunEntity` ↔ `DraftSlotEntity` (UUID-keyed run state, config, seed, rerolls, current spin, 11 slots with filled snapshots) + `DraftRunRepository`. Keeps JPA out of the pure engine.
+- `com.draft.footy.api` — Spring layer wrapping the engine.
+    - `GameCatalog` — shared loaded pool (`clubs`/`pool`/`primeIndex` + `eligibleClubSeasons(scope, league, era…)`); `@PostConstruct` after `DataSeeder`, race-free. Consumed by both services.
+    - `SimulationController` (`GET /api/season/demo`, `&prime=true`) — stateless demo. `SeasonViewMapper` renders the shared season JSON for both demo and draft (and carries the `you`-flag fix — compares against `result.userStanding().team`).
+    - `DraftRunController` / `DraftRunService` — **stateful draft flow** (§3/§5B/§16): `POST /api/runs` → `/{id}/spin` → `/{id}/draft` → `/{id}/move` → `/{id}/simulate`, server-authoritative, seeded for replay. Ratings render per `ShowRatings`: ON exact / SCOUT range only / OFF hidden — **the true overall never reaches the client in SCOUT/OFF**, and live strength is gated to ON so the aggregate can't leak it. *(World Draft + Squad First wired; Position First + Classic/§5b rejected at create for now.)*
 
 ## Invariants — do not break these
 
@@ -73,7 +86,11 @@ On the locked **players_22** reference: 89 → ~92 pts (projected 92), 90 → ~9
     - ✅ **JPA + H2 seeding** (cert practice, not perf) — relational `ClubSeasonEntity`↔`PlayerEntity` + ordered positions join table; `DataSeeder` seeds H2 from the CSV at startup, `SimulationService` reads it back via the repository. H2 console at `/h2-console` (`jdbc:h2:mem:footy`). See `com.draft.footy.persistence`.
     - ✅ **Dixon-Coles draw correction** — `MatchEngine.sampleScore` draws correlated scorelines from the DC joint distribution (`RHO`), lifting the draw rate from ~17% (pure Poisson) to ~24%. Recalibrated (`SCALE` 16→14.5, `RHO` -0.11) so players_22 holds 89→~92 / 90→~94. See the tuning map above.
     - ℹ️ **Calibration:** locked on the single-season **players_22** reference (`Demo players_22.csv`). The deeper multi-era pool runs a touch under (90 → ~92, draws ~18%) — expected, the opponent pyramid is the same tough league regardless of the user. `EngineTest` calibration assertions pin to `players_22.csv`.
-- **Phase 2:** stateful `DraftRun` resource (`POST /api/runs`, `/spin`, `/draft`, `/simulate`); React scout-dossier frontend; **Scout** fuzzy-ratings mode (strip true_rating in the DTO; derive the asymmetric band deterministically from playerId+runSeed).
+- **Phase 2 (in progress):**
+    - ✅ **Stateful `DraftRun` REST resource** — `POST /api/runs` → `/{id}/spin` `/draft` `/move` `/simulate`, persisted in H2, server-authoritative, seed-replayable (`DraftRunController`/`DraftRunService`). World Draft + Squad First; natural-positions-only placement; difficulty rerolls + free-reroll dead-end safeguard; Prime/Career; era filter.
+    - ✅ **Scout fuzzy-ratings** (headline) — `ShowRatings` ON/SCOUT/OFF at the DTO boundary; true overall stripped in SCOUT/OFF, live strength gated to ON (`ScoutRatings`, deterministic from `(sofifaId, runSeed)`).
+    - ⏳ **React scout-dossier frontend** (Vite + React + TS + Tailwind) — next pass; **must be a distinctive, fun UI** (scout-dossier identity §9), not a slot-machine reskin.
+    - ⏳ **Position First** draft mode; **Classic** single-league + §5b "global team in one real league" (needs real-league opponents, not the pyramid) — later passes; rejected at `create` for now.
 - **Phase 3:** AI legends pack (icons retired pre-2014, absent from FIFA data); async LLM flavor text (never block the results endpoint).
 
 ## Conventions
