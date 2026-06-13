@@ -39,13 +39,22 @@ public class DraftRunController {
     public record RunStateView(String runId, String formation, String difficulty, String showRatings,
                                String draftMode, String playerRatings, String leagueScope, String status,
                                long seed, int rerollsRemaining, int slotsRemaining,
-                               StrengthView strength, List<SlotView> slots, SpinInfo currentSpin,
-                               SeasonViewMapper.OddsView projection) { }
+                               StrengthView strength, List<SlotView> slots, SpinInfo currentSpin) { }
     public record SpinInfo(String club, String season, String league) { }
     public record SquadPlayerView(int sofifaId, String name, String nation, List<String> positions,
                                   RatingView rating, List<String> eligibleSlots) { }
     public record SpinView(String club, String season, String league, int rerollsRemaining,
                            List<SquadPlayerView> squad) { }
+    /** A drafted-from squad revealed after a pick (true ratings) — learn who you passed on. */
+    public record DeclassifiedPlayer(int sofifaId, String name, String position, String line, int overall,
+                                     boolean draftedByYou) { }
+    public record DraftResultView(RunStateView state, String club, String season, List<DeclassifiedPlayer> declassified) { }
+    /** A player within a team-viewer XI; stats are null pre-sim (league preview), populated post-sim. */
+    public record XiSlotView(String position, String line, String name, int overall,
+                             Integer goals, Integer assists, Integer cleanSheets) { }
+    public record LeagueTeamView(String team, int strength, String tier, String formation, List<XiSlotView> xi) { }
+    public record PreviewView(SeasonViewMapper.OddsView projection, int userOverall, int leagueMean,
+                              List<LeagueTeamView> league) { }
 
     // ---- endpoints ----
 
@@ -74,8 +83,9 @@ public class DraftRunController {
     }
 
     @PostMapping("/{id}/draft")
-    public RunStateView draft(@PathVariable String id, @RequestBody DraftRequest req) {
-        return toState(service.draft(id, req.slotPosition(), req.sofifaId()));
+    public DraftResultView draft(@PathVariable String id, @RequestBody DraftRequest req) {
+        var r = service.draft(id, req.slotPosition(), req.sofifaId());
+        return new DraftResultView(toState(r.run()), r.squad().club, r.squad().season, declassify(r));
     }
 
     @PostMapping("/{id}/move")
@@ -83,10 +93,21 @@ public class DraftRunController {
         return toState(service.move(id, req.fromSlot(), req.toSlot()));
     }
 
+    @GetMapping("/{id}/preview")
+    public PreviewView preview(@PathVariable String id) {
+        var p = service.preview(id);
+        var o = p.projection();
+        List<LeagueTeamView> league = p.league().stream()
+            .map(DraftRunController::toLeagueTeam)
+            .sorted((a, b) -> Integer.compare(b.strength(), a.strength()))
+            .toList();
+        return new PreviewView(new SeasonViewMapper.OddsView(o.expectedPoints(), o.winLeague(), o.top4(), o.relegation()),
+            p.userOverall(), p.leagueMean(), league);
+    }
+
     @PostMapping("/{id}/simulate")
     public SeasonViewMapper.SeasonView simulate(@PathVariable String id) {
-        var res = service.simulate(id);
-        return SeasonViewMapper.toView(res, Projection.odds(res.userStanding().team.overall()));
+        return SeasonViewMapper.toView(service.simulate(id));
     }
 
     // ---- rendering ----
@@ -96,9 +117,10 @@ public class DraftRunController {
         for (DraftSlotEntity s : run.getSlots()) {
             String line = Line.of(s.getPosition()).name();
             if (s.isFilled())
+                // Drafted players are revealed (you know who you picked) — exact rating even in Scout/Off.
                 slots.add(new SlotView(s.getSlotIndex(), s.getPosition(), line, true,
                     s.getName(), s.getNation(), s.getPlayerPositions(),
-                    rating(run, s.getSofifaId(), s.getOverall()), s.getSourceClub(), s.getSourceSeason()));
+                    new RatingView(s.getOverall(), null, null, false), s.getSourceClub(), s.getSourceSeason()));
             else
                 slots.add(new SlotView(s.getSlotIndex(), s.getPosition(), line, false,
                     null, null, null, null, null, null));
@@ -107,16 +129,35 @@ public class DraftRunController {
         return new RunStateView(run.getId(), run.getFormation(), run.getDifficulty().name(),
             run.getShowRatings().name(), run.getDraftMode().name(), run.getPlayerRatings().name(),
             run.getLeagueScope().name(), run.getStatus().name(), run.getSeed(),
-            run.getRerollsRemaining(), run.openSlots().size(), strength(run), slots, spin, projection(run));
+            run.getRerollsRemaining(), run.openSlots().size(), strength(run), slots, spin);
     }
 
-    /** The bookies' pre-season projection — shown once the XI is complete (the §6 dual-layer reveal). */
-    private SeasonViewMapper.OddsView projection(DraftRunEntity run) {
-        if (!run.isComplete()) return null;
-        Xi xi = new Xi("proj");
-        for (DraftSlotEntity s : run.getSlots()) xi.add(s.getPosition(), s.toPlayer());
-        Projection.Odds o = Projection.odds(xi.overall());
-        return new SeasonViewMapper.OddsView(o.expectedPoints(), o.winLeague(), o.top4(), o.relegation());
+    /** Reveal the drafted-from squad with TRUE (active) ratings — sorted strongest-first, your pick flagged. */
+    private List<DeclassifiedPlayer> declassify(DraftRunService.DraftResult r) {
+        List<DeclassifiedPlayer> out = new ArrayList<>();
+        for (Player base : r.squad().roster) {
+            Player a = service.active(r.run(), base);
+            out.add(new DeclassifiedPlayer(a.id(), a.name(), a.primaryPosition(),
+                a.primaryLine().name(), a.overall(), a.id() == r.draftedId()));
+        }
+        out.sort((x, y) -> Integer.compare(y.overall(), x.overall()));
+        return out;
+    }
+
+    private static LeagueTeamView toLeagueTeam(Xi xi) {
+        var ord = TeamLayout.inFormationOrder(xi); // lay the XI out in its own formation for the pitch viewer
+        List<XiSlotView> squad = ord.slots().stream()
+            .map(s -> new XiSlotView(s.position(), s.line().name(), s.player().name(), s.player().overall(), null, null, null))
+            .toList();
+        return new LeagueTeamView(xi.name, xi.overall(), tierLabel(xi.overall()), ord.formation(), squad);
+    }
+
+    private static String tierLabel(int strength) {
+        if (strength >= 90) return "JUGGERNAUT";
+        if (strength >= 85) return "CONTENDER";
+        if (strength >= 80) return "EUROPEAN";
+        if (strength >= 75) return "MID-TABLE";
+        return "SCRAPPER";
     }
 
     private SpinView toSpin(DraftRunEntity run, ClubSeason squad) {
@@ -152,11 +193,10 @@ public class DraftRunController {
     }
 
     /**
-     * Live team strength from the filled slots — only in ON mode, since an exact aggregate would otherwise leak
-     * the hidden ratings (§16). A line with no drafted player yet returns null (shown as "—").
+     * Live team strength from the filled slots. Drafted players are revealed (you know your own picks), so this
+     * reflects only known players and leaks nothing — shown in every mode. A line with none drafted yet is null.
      */
     private StrengthView strength(DraftRunEntity run) {
-        if (run.getShowRatings() != ShowRatings.ON) return null;
         Xi xi = new Xi("strength");
         for (DraftSlotEntity s : run.getSlots()) if (s.isFilled()) xi.add(s.getPosition(), s.toPlayer());
         if (xi.slots.isEmpty()) return new StrengthView(null, null, null, null, null);

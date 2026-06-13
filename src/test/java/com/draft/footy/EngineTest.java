@@ -97,6 +97,33 @@ class EngineTest {
     }
 
     @Test
+    void opponentLeagueNeverRepeatsAClubAcrossEras() throws Exception {
+        assumeTrue(Files.exists(MULTI_CSV), "data/male_players_all.csv must be present");
+        var clubs = FifaDataLoader.loadAllSeasons(MULTI_CSV);
+        var club = java.util.regex.Pattern.compile("^(.*) \\d{4}/\\d{2} \\("); // "Liverpool 2020/21 (4-3-3)" -> "Liverpool"
+        for (long seed = 0; seed < 30; seed++) {
+            var league = new OpponentPyramid(clubs).generate(new Random(seed));
+            java.util.Set<String> seen = new HashSet<>();
+            for (Xi xi : league) {
+                var m = club.matcher(xi.name);
+                assertTrue(m.find(), "unexpected team label: " + xi.name);
+                assertTrue(seen.add(m.group(1)), "same club twice in one league: " + m.group(1) + " (seed " + seed + ")");
+            }
+        }
+    }
+
+    @Test
+    void goldenGloveIsKeepersOnly() throws Exception {
+        var clubs = clubs(); var pool = pool(clubs);
+        Xi xi = buildXi(pool, 85);
+        Random rng = new Random(4L);
+        var res = new SeasonSimulator().simulate(xi, new OpponentPyramid(clubs).generate(rng), rng);
+        assertFalse(res.goldenGlove().isEmpty());
+        for (var s : res.goldenGlove())
+            assertEquals(Line.GK, s.player.primaryLine(), s.player.name() + " is not a keeper");
+    }
+
+    @Test
     void dixonColesTauBoostsLowDrawsAndLeavesOthersAlone() {
         // RHO < 0: the four low-score cells shift mass into the draws (0-0, 1-1); everything else is untouched.
         double l = 1.6, m = 1.3;

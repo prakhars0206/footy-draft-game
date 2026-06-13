@@ -65,7 +65,46 @@ export interface RunState {
   strength: Strength | null
   slots: Slot[]
   currentSpin: SpinInfo | null
-  projection: Odds | null // populated once the XI is complete (the pre-season "bookies" reveal)
+}
+
+/** Returned by /draft: updated state + the squad you drafted from, revealed (true ratings). */
+export interface DeclassifiedPlayer {
+  sofifaId: number
+  name: string
+  position: string
+  line: LineName
+  overall: number
+  draftedByYou: boolean
+}
+export interface DraftResult {
+  state: RunState
+  club: string
+  season: string
+  declassified: DeclassifiedPlayer[]
+}
+
+/** A player within a team-viewer XI; stats are null pre-sim, populated post-sim. */
+export interface XiSlot {
+  position: string
+  line: LineName
+  name: string
+  overall: number
+  goals?: number | null
+  assists?: number | null
+  cleanSheets?: number | null
+}
+export interface LeagueTeam {
+  team: string
+  strength: number
+  tier: string
+  formation: string
+  xi: XiSlot[]
+}
+export interface Preview {
+  projection: Odds
+  userOverall: number
+  leagueMean: number
+  league: LeagueTeam[]
 }
 
 export interface SquadPlayer {
@@ -92,14 +131,18 @@ export interface StatRow {
 }
 export interface TeamRow {
   pos: number
+  projectedPos: number
+  projectedPoints: number
   team: string
+  formation: string
+  strength: number
   points: number
   won: number
   drawn: number
   lost: number
   gd: number
   you: boolean
-  startingXI: string[]
+  players: XiSlot[]
 }
 export interface PlayerAward {
   player: string
@@ -107,12 +150,6 @@ export interface PlayerAward {
   goals: number
   assists: number
   cleanSheets: number
-}
-export interface XiPlayer {
-  position: string
-  line: LineName
-  name: string
-  overall: number
 }
 export interface SeasonView {
   overall: number
@@ -135,7 +172,6 @@ export interface SeasonView {
   topAssists: StatRow[]
   goldenGlove: StatRow[]
   playerOfSeason: PlayerAward | null
-  yourXI: XiPlayer[]
 }
 
 export interface CreateRunConfig {
@@ -176,8 +212,9 @@ export const api = {
   getRun: (id: string) => req<RunState>(`/${id}`, 'GET'),
   spin: (id: string) => req<SpinView>(`/${id}/spin`, 'POST'),
   draft: (id: string, slotPosition: string, sofifaId: number) =>
-    req<RunState>(`/${id}/draft`, 'POST', { slotPosition, sofifaId }),
+    req<DraftResult>(`/${id}/draft`, 'POST', { slotPosition, sofifaId }),
   move: (id: string, fromSlot: number, toSlot: number) =>
     req<RunState>(`/${id}/move`, 'POST', { fromSlot, toSlot }),
+  preview: (id: string) => req<Preview>(`/${id}/preview`, 'GET'),
   simulate: (id: string) => req<SeasonView>(`/${id}/simulate`, 'POST'),
 }

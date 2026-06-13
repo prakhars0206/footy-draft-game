@@ -5,46 +5,72 @@ import com.draft.footy.SeasonSimulator;
 import com.draft.footy.Xi;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Maps a simulated {@link SeasonSimulator.SeasonResult} into the JSON view shared by the demo and draft endpoints. */
 public final class SeasonViewMapper {
 
     private SeasonViewMapper() { }
 
-    public record TeamRow(int pos, String team, int points, int won, int drawn, int lost, int gd, boolean you,
-                          List<String> startingXI) { }
+    /** A player within a team's XI plus their season stats — drives the post-sim team viewer. */
+    public record PlayerStatView(String position, String line, String name, int overall,
+                                 int goals, int assists, int cleanSheets) { }
+    public record TeamRow(int pos, int projectedPos, int projectedPoints, String team, String formation, int strength,
+                          int points, int won, int drawn, int lost, int gd, boolean you,
+                          List<PlayerStatView> players) { }
     public record StatRow(String player, String team, int value) { }
     public record OddsView(int expectedPoints, double winLeague, double top4, double relegation) { }
     /** Player of the Season — full line, so the UI can show why they won it. */
     public record PlayerAward(String player, String team, int goals, int assists, int cleanSheets) { }
-    /** The user's drafted XI with TRUE overalls — the Scout debrief reveal. */
-    public record XiPlayer(String position, String line, String name, int overall) { }
     public record SeasonView(
         int overall, int attack, int midfield, int defence, int gk,
         OddsView projection,
         int finishPos, int points, int won, int drawn, int lost, int goalsFor, int goalsAgainst,
         int biggestWin, int longestWinStreak,
         List<TeamRow> table, List<StatRow> goldenBoot, List<StatRow> topAssists, List<StatRow> goldenGlove,
-        PlayerAward playerOfSeason, List<XiPlayer> yourXI) { }
+        PlayerAward playerOfSeason) { }
 
-    public static SeasonView toView(SeasonSimulator.SeasonResult res, Projection.Odds odds) {
-        Xi userXi = res.userStanding().team; // the user's XI carried by the result — used for the `you` flag
+    public static SeasonView toView(SeasonSimulator.SeasonResult res) {
+        Xi userXi = res.userStanding().team;
         var user = res.userStanding();
+
+        int n = res.table().size();
+        int totalOverall = res.table().stream().mapToInt(st -> st.team.overall()).sum();
+        // Each team's league-aware projected points: shift its rating by how soft/tough the OTHER teams are.
+        Map<Xi, Integer> projPoints = new HashMap<>();
+        for (var st : res.table()) {
+            int meanOthers = (int) Math.round((totalOverall - st.team.overall()) / (double) (n - 1));
+            projPoints.put(st.team, LeagueProjection.expectedPoints(st.team.overall(), meanOthers));
+        }
+        // Projected table order = rank by those projected points (the bookies' pre-season table).
+        List<Xi> byProjected = res.table().stream().map(st -> st.team)
+            .sorted(Comparator.comparingInt((Xi t) -> projPoints.get(t)).reversed())
+            .toList();
+        Map<Xi, Integer> projPos = new HashMap<>();
+        for (int i = 0; i < byProjected.size(); i++) projPos.put(byProjected.get(i), i + 1);
 
         List<TeamRow> table = new ArrayList<>();
         for (int i = 0; i < res.table().size(); i++) {
             var s = res.table().get(i);
-            List<String> lineup = s.team.slots.stream()
-                .map(slot -> slot.position() + ": " + slot.player().name() + " (" + slot.player().overall() + ")")
-                .toList();
-            table.add(new TeamRow(i + 1, s.team.name, s.points(), s.won, s.drawn, s.lost, s.gd(),
-                s.team == userXi, lineup));
+            var ord = TeamLayout.inFormationOrder(s.team);
+            Map<Integer, SeasonSimulator.PlayerStat> statById = new HashMap<>();
+            for (var ps : res.teamStats().getOrDefault(s.team, List.of())) statById.put(ps.player.id(), ps);
+            List<PlayerStatView> players = ord.slots().stream().map(sl -> {
+                var ps = statById.get(sl.player().id());
+                return new PlayerStatView(sl.position(), sl.line().name(), sl.player().name(), sl.player().overall(),
+                    ps != null ? ps.goals : 0, ps != null ? ps.assists : 0, ps != null ? ps.cleanSheets : 0);
+            }).toList();
+            table.add(new TeamRow(i + 1, projPos.getOrDefault(s.team, i + 1), projPoints.getOrDefault(s.team, 0),
+                stripFormation(s.team.name), ord.formation(), s.team.overall(),
+                s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == userXi, players));
         }
 
-        List<XiPlayer> yourXI = userXi.slots.stream()
-            .map(sl -> new XiPlayer(sl.position(), sl.line().name(), sl.player().name(), sl.player().overall()))
-            .toList();
+        // Debrief projection = the SAME league-aware projection the pre-sim panel showed (mean of the other 19).
+        int userMeanOthers = (int) Math.round((totalOverall - userXi.overall()) / (double) (n - 1));
+        Projection.Odds odds = LeagueProjection.odds(userXi.overall(), userMeanOthers);
 
         var pots = res.playerOfSeason();
         PlayerAward potsView = pots == null ? null
@@ -58,7 +84,12 @@ public final class SeasonViewMapper {
             table,
             res.topScorers().stream().map(s -> new StatRow(s.player.name(), s.team, s.goals)).limit(10).toList(),
             res.topAssists().stream().map(s -> new StatRow(s.player.name(), s.team, s.assists)).limit(10).toList(),
-            res.topCleanSheets().stream().map(s -> new StatRow(s.player.name(), s.team, s.cleanSheets)).limit(10).toList(),
-            potsView, yourXI);
+            res.goldenGlove().stream().map(s -> new StatRow(s.player.name(), s.team, s.cleanSheets)).limit(10).toList(),
+            potsView);
+    }
+
+    /** "Real Madrid CF 2018/19 (4-3-3)" -> "Real Madrid CF 2018/19" (the formation is its own field). */
+    private static String stripFormation(String name) {
+        return name.replaceAll(" \\([^)]*\\)$", "");
     }
 }

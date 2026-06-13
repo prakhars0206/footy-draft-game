@@ -1,7 +1,6 @@
 package com.draft.footy.api;
 
 import com.draft.footy.Formation;
-import com.draft.footy.Projection;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -25,9 +24,7 @@ public class SimulationController {
             @RequestParam(defaultValue = "false") boolean prime) {
 
         Formation f = parseFormation(formation);
-        var res = service.simulateDemo(overall, f, seed, prime);
-        Projection.Odds odds = service.projection(res.userStanding().team.overall());
-        return SeasonViewMapper.toView(res, odds);
+        return SeasonViewMapper.toView(service.simulateDemo(overall, f, seed, prime));
     }
 
     private Formation parseFormation(String label) {

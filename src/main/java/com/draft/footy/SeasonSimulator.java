@@ -28,9 +28,10 @@ public final class SeasonSimulator {
 
     public record SeasonResult(
         List<Standing> table, Standing userStanding, int userPosition,
-        List<PlayerStat> topScorers, List<PlayerStat> topAssists, List<PlayerStat> topCleanSheets,
+        List<PlayerStat> topScorers, List<PlayerStat> topAssists, List<PlayerStat> goldenGlove,
         PlayerStat playerOfSeason,
-        int biggestWinFor, int biggestWinAgainst, int longestWinStreak) {}
+        int biggestWinFor, int biggestWinAgainst, int longestWinStreak,
+        Map<Xi, List<PlayerStat>> teamStats) {}
 
     public SeasonResult simulate(Xi userXi, List<Xi> opponents, Random rng) {
         List<Xi> teams = new ArrayList<>();
@@ -77,10 +78,17 @@ public final class SeasonSimulator {
         Standing user = standings.get(userXi);
         int pos = table.indexOf(user) + 1;
 
+        Map<Xi, List<PlayerStat>> teamStats = new HashMap<>();
+        for (var e : stats.entrySet()) teamStats.put(e.getKey(), new ArrayList<>(e.getValue().values()));
+
         return new SeasonResult(table, user, pos,
-            topBy(stats, s -> s.goals), topBy(stats, s -> s.assists), topBy(stats, s -> s.cleanSheets),
+            topBy(stats, s -> s.goals, p -> true),
+            topBy(stats, s -> s.assists, p -> true),
+            // Golden Glove is the keepers' award — clean sheets are credited to the whole backline, so filter to GK.
+            topBy(stats, s -> s.cleanSheets, p -> p.player.primaryLine() == Line.GK),
             playerOfSeason(stats),
-            biggest(userScores, true), biggest(userScores, false), longestStreak(userScores));
+            biggest(userScores, true), biggest(userScores, false), longestStreak(userScores),
+            teamStats);
     }
 
     private void record(Standing s, int gf, int ga) {
@@ -100,9 +108,12 @@ public final class SeasonSimulator {
         return best;
     }
 
-    private List<PlayerStat> topBy(Map<Xi, Map<Integer, PlayerStat>> stats, java.util.function.ToIntFunction<PlayerStat> key) {
+    private List<PlayerStat> topBy(Map<Xi, Map<Integer, PlayerStat>> stats,
+                                   java.util.function.ToIntFunction<PlayerStat> key,
+                                   java.util.function.Predicate<PlayerStat> filter) {
         List<PlayerStat> list = new ArrayList<>();
-        for (Map<Integer, PlayerStat> m : stats.values()) list.addAll(m.values());
+        for (Map<Integer, PlayerStat> m : stats.values())
+            for (PlayerStat s : m.values()) if (filter.test(s)) list.add(s);
         list.sort(Comparator.comparingInt(key).reversed());
         return list.subList(0, Math.min(10, list.size()));
     }

@@ -43,7 +43,7 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
     - `PrimeIndex` — career-best ("Prime Mode") lookup: groups by `player_id`, keeps the peak-`overall` row (rating + positions from the **same** edition). Applied to the **user XI only** (invariant 6); a no-op on single-edition data.
     - `ClubSeason` / `Xi` — `optimalXi()` fields a club's best-fit XI: tries all 7 formations and picks the one with the most **natural-position** fits (overall as tiebreak), cached. `buildXi(formation)` fills a single formation, with fallbacks that keep keepers out of outfield slots and vice versa. `Xi` carries attack/mid/def/gk sub-scores.
     - `OpponentPyramid` — 19 opponents sampled by **`optimalStrength()`** tier (no fixed formation), bounded randomization, deduped, sums to 19. Each opponent fields its own best-fit shape.
-    - `MatchEngine` — seeded-RNG Poisson scoreline; scorer/assist chosen by **position weight (`ScoringWeights`) × (overall/100)²**.
+    - `MatchEngine` — seeded-RNG Poisson scoreline; scorer/assist chosen by **position weight (`ScoringWeights`) × `ratingFactor(overall)`** (baseline-shifted `((overall-55)/45)²`, so higher-rated players grab a clearly larger share — tune the exponent in `ratingFactor`).
     - `ScoringWeights` — per-position goal/assist propensity. **Attribution only — does NOT affect scorelines or points**, so tune freely against the leaderboards.
     - `SeasonSimulator` — 380-game round-robin, **league-wide** stat ledger keyed per (team, player), table, awards.
     - `Projection` — Layer-1 "bookies" expected points + finish odds.
@@ -59,7 +59,7 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
 
 1. **Single strength function**: club-season → `optimalStrength()` (overall of its best-fit XI). Used for the user XI, Classic opponents, and World-draft opponents alike. No bespoke per-opponent ratings.
 2. **Seeded RNG threaded everywhere** → a season is fully reproducible (tests + future share/replay depend on it). Same seed ⇒ identical result.
-3. **League-wide stats**, keyed **per (team, player)**, never globally by player id (the same real player can be on two teams). Attribution is weighted by position × rating², which only redistributes goals/assists — it never changes points.
+3. **League-wide stats**, keyed **per (team, player)**, never globally by player id (the same real player can be on two teams). Attribution is weighted by position × `ratingFactor(overall)`, which only redistributes goals/assists — it never changes points.
 4. **Natural positions** for placement; fallbacks never field a keeper outfield or an outfielder in goal.
 5. **Dual-layer**: Layer 1 (projection, no opponents) vs Layer 2 (actual sim). The gap is the drama (over/underperformed).
 6. Opponents are rated/attributed as **their sampled season**, independent of the user's Prime/Career toggle.

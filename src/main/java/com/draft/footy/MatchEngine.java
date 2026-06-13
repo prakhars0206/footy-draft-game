@@ -51,20 +51,26 @@ public final class MatchEngine {
         return new GoalEvent(scorer, assist, minute, home);
     }
 
-    /** Weighted pick of a scorer (attack weights) or assister (assist weights), excluding `exclude`. */
+    /**
+     * Rating boost on a player's goal/assist share — attribution only (never changes scorelines or points).
+     * Baseline-shifted (≈0 at 55, ≈1 at 99) then squared, so higher-rated players grab a clearly larger share:
+     * a 90 is ~2× an 80 (vs ~1.3× with the old overall/100² model). For an even steeper edge, cube it instead.
+     */
+    static double ratingFactor(int overall) {
+        double r = Math.max(0.0, (overall - 55) / 45.0);
+        return r * r;
+    }
 
+    /** Weighted pick of a scorer (attack weights) or assister (assist weights), excluding `exclude`. */
     private Player pick(Xi team, boolean scoring, Random rng, Player exclude) {
         double total = 0;
         for (Xi.Slot s : team.slots) {
             if (s.player().equals(exclude)) continue;
 
-            //  Multiply base positional weight by the player's rating percentage
+            // Base positional weight, sharpened by the player's rating (higher overalls grab far more).
             double baseWeight = scoring ? ScoringWeights.of(s.position()).goal()
                     : ScoringWeights.of(s.position()).assist();
-            double ratingModifier = s.player().overall() / 100.0;
-
-            // We square the modifier just to give high-rated players a slightly sharper advantage
-            total += baseWeight * (ratingModifier * ratingModifier);
+            total += baseWeight * ratingFactor(s.player().overall());
         }
 
         if (total <= 0) return team.slots.get(0).player(); // Fallback to first attacker
@@ -76,8 +82,7 @@ public final class MatchEngine {
 
             double baseWeight = scoring ? ScoringWeights.of(s.position()).goal()
                     : ScoringWeights.of(s.position()).assist();
-            double ratingModifier = s.player().overall() / 100.0;
-            double weight = baseWeight * (ratingModifier * ratingModifier);
+            double weight = baseWeight * ratingFactor(s.player().overall());
 
             // Skip players who mathematically cannot score/assist
             if (weight <= 0) continue;

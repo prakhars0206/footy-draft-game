@@ -53,14 +53,15 @@ public final class OpponentPyramid {
             while (placed < counts[i] && guard < 200 && !band.isEmpty()) {
                 ClubSeason cs = band.get(rng.nextInt(band.size()));
                 guard++;
-                if (picked.add(cs.label())) { opponents.add(cs.optimalXi()); placed++; }
+                // Dedupe by CLUB (not club-season) so one league never fields two eras of the same club.
+                if (picked.add(cs.club)) { opponents.add(cs.optimalXi()); placed++; }
             }
         }
         // Safety: top up to 19 from anywhere if some bands were thin.
         int guard = 0;
         while (opponents.size() < OPPONENTS && !pool.isEmpty() && guard++ < 500) {
             ClubSeason cs = pool.get(rng.nextInt(pool.size()));
-            if (picked.add(cs.label())) opponents.add(cs.optimalXi());
+            if (picked.add(cs.club)) opponents.add(cs.optimalXi());
         }
         return opponents.subList(0, Math.min(OPPONENTS, opponents.size()));
     }

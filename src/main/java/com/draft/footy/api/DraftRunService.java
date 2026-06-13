@@ -37,6 +37,12 @@ public class DraftRunService {
     /** A spin's result: the updated run plus the landed club-season's full roster (for rendering the squad). */
     public record SpinResult(DraftRunEntity run, ClubSeason squad) { }
 
+    /** A draft's result: the updated run plus the squad it was drafted from (declassified after the pick). */
+    public record DraftResult(DraftRunEntity run, ClubSeason squad, int draftedId) { }
+
+    /** Pre-season preview once the XI is complete: the league you'll face + a league-aware projection. */
+    public record LeaguePreview(Projection.Odds projection, int userOverall, int leagueMean, List<Xi> league) { }
+
     public DraftRunEntity create(CreateRunCommand cmd) {
         if (cmd.leagueScope() == LeagueScope.CLASSIC)
             throw bad("Classic (single-league) mode is not wired yet — use WORLD this pass.");
@@ -76,7 +82,7 @@ public class DraftRunService {
     }
 
     /** Place a player from the current spin into an open slot of {@code slotPosition} (natural positions only). */
-    public DraftRunEntity draft(String runId, String slotPosition, int sofifaId) {
+    public DraftResult draft(String runId, String slotPosition, int sofifaId) {
         DraftRunEntity run = get(runId);
         requireDrafting(run);
         if (!run.hasSpin()) throw bad("spin a squad before drafting");
@@ -95,7 +101,21 @@ public class DraftRunService {
 
         slot.fill(active, squad.club, squad.season);
         run.clearSpin();
-        return run;
+        return new DraftResult(run, squad, sofifaId);
+    }
+
+    /** The league you'll face + a league-aware projection (DESIGN_SPEC §6/§7). Available once the XI is complete. */
+    @Transactional(readOnly = true)
+    public LeaguePreview preview(String runId) {
+        DraftRunEntity run = get(runId);
+        if (!run.isComplete()) throw bad("draft incomplete: complete the XI before previewing the league");
+        // Same seed → the same 19 teams simulate() will field (it generates with new Random(seed) first too).
+        List<Xi> league = new OpponentPyramid(catalog.clubs()).generate(new Random(run.getSeed()));
+        int leagueMean = (int) Math.round(league.stream().mapToInt(Xi::overall).average().orElse(LeagueProjection.REF_MEAN));
+        int userOverall = buildUserXi(run).overall();
+        // League-aware: a softer league makes you effectively stronger, a brutal one weaker, than the reference.
+        // leagueMean here is the mean of the 19 opponents = the user's "mean of others" — matches the debrief.
+        return new LeaguePreview(LeagueProjection.odds(userOverall, leagueMean), userOverall, leagueMean, league);
     }
 
     /** Reposition an already-drafted player from one slot to an open slot they can also play (§5B). */
@@ -121,9 +141,7 @@ public class DraftRunService {
         if (!run.isComplete())
             throw bad("draft incomplete: " + run.openSlots().size() + " slot(s) still open");
 
-        Xi userXi = new Xi("Your XI");
-        for (DraftSlotEntity s : run.getSlots()) userXi.add(s.getPosition(), s.toPlayer());
-
+        Xi userXi = buildUserXi(run);
         Random rng = new Random(run.getSeed());
         List<Xi> opponents = new OpponentPyramid(catalog.clubs()).generate(rng);
         SeasonSimulator.SeasonResult result = new SeasonSimulator().simulate(userXi, opponents, rng);
@@ -151,6 +169,12 @@ public class DraftRunService {
             for (String pos : openPositions) if (a.canPlay(pos)) return true;
         }
         return false;
+    }
+
+    private Xi buildUserXi(DraftRunEntity run) {
+        Xi xi = new Xi("Your XI");
+        for (DraftSlotEntity s : run.getSlots()) xi.add(s.getPosition(), s.toPlayer());
+        return xi;
     }
 
     /** The player as they'd be drafted: their peak-year snapshot in Prime mode, otherwise the spun season. */

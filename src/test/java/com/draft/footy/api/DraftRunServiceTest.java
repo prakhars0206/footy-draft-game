@@ -126,6 +126,61 @@ class DraftRunServiceTest {
     }
 
     @Test
+    void previewReturnsLeagueAndLeagueAwareProjection() {
+        var run = service.create(cmd(55L, ShowRatings.ON, PlayerRatings.CAREER));
+        completeDraft(run.getId());
+        var p = service.preview(run.getId());
+        assertEquals(19, p.league().size(), "preview should field the 19 opponents");
+        assertTrue(p.projection().expectedPoints() > 0 && p.projection().expectedPoints() <= 104);
+        assertTrue(p.leagueMean() > 60 && p.leagueMean() < 95, "league mean in a sane band, was " + p.leagueMean());
+        // Each opponent carries a full XI for inspection.
+        assertTrue(p.league().stream().allMatch(t -> t.slots.size() == 11));
+    }
+
+    @Test
+    void draftDeclassifiesTheSpunSquadWithTrueId() {
+        var run = service.create(cmd(7L, ShowRatings.SCOUT, PlayerRatings.CAREER));
+        var spin = service.spin(run.getId());
+        List<String> open = openPositions(run);
+        for (Player base : spin.squad().roster) {
+            Player active = service.active(run, base);
+            String pos = open.stream().filter(active::canPlay).findFirst().orElse(null);
+            if (pos == null) continue;
+            var res = service.draft(run.getId(), pos, base.id());
+            assertEquals(base.id(), res.draftedId());
+            assertEquals(spin.squad().roster.size(), res.squad().roster.size(), "the whole squad is declassified");
+            return;
+        }
+        fail("no eligible squad player to draft");
+    }
+
+    @Test
+    void seasonViewCarriesEveryTeamWithStatsAndProjectedPos() {
+        var run = service.create(cmd(99L, ShowRatings.ON, PlayerRatings.CAREER));
+        completeDraft(run.getId());
+        var view = controller.simulate(run.getId());
+        assertEquals(20, view.table().size());
+        for (var row : view.table()) {
+            assertEquals(11, row.players().size(), "each team carries its full XI");
+            assertNotNull(row.formation());
+            assertTrue(row.projectedPos() >= 1 && row.projectedPos() <= 20, "projected pos in range");
+        }
+        int totalGoals = view.table().stream().flatMap(t -> t.players().stream()).mapToInt(p -> p.goals()).sum();
+        assertTrue(totalGoals > 100, "per-player goal stats attached league-wide, was " + totalGoals);
+    }
+
+    @Test
+    void preSeasonAndDebriefProjectionsAgree() {
+        var run = service.create(cmd(2025L, ShowRatings.ON, PlayerRatings.CAREER));
+        completeDraft(run.getId());
+        int presim = service.preview(run.getId()).projection().expectedPoints();
+        var view = controller.simulate(run.getId());
+        assertEquals(presim, view.projection().expectedPoints(), "debrief projection must match the pre-sim one");
+        var you = view.table().stream().filter(SeasonViewMapper.TeamRow::you).findFirst().orElseThrow();
+        assertEquals(presim, you.projectedPoints(), "your row's projected points must match the projection");
+    }
+
+    @Test
     void scoutModeNeverExposesTrueOverall() {
         var state = controller.create(new DraftRunController.CreateRunRequest(
             "4-3-3", Difficulty.NORMAL, ShowRatings.SCOUT, DraftMode.SQUAD_FIRST, PlayerRatings.CAREER,
@@ -138,7 +193,16 @@ class DraftRunServiceTest {
             assertNotNull(pv.rating().high());
             assertTrue(pv.rating().low() <= pv.rating().high());
         }
-        // And live strength is gated in SCOUT mode so the aggregate can't leak true ratings.
-        assertNull(state.strength(), "strength must be hidden outside ON mode");
+        // Strength is shown in every mode now (drafted players are revealed), but empty before any pick.
+        assertNull(state.strength().overall(), "no team strength before drafting anyone");
+    }
+
+    @Test
+    void draftedPlayersAreRevealedOnThePitch() {
+        var run = service.create(cmd(31L, ShowRatings.SCOUT, PlayerRatings.CAREER));
+        draftOne(run.getId());
+        var state = controller.state(run.getId());
+        var filled = state.slots().stream().filter(DraftRunController.SlotView::filled).findFirst().orElseThrow();
+        assertNotNull(filled.rating().overall(), "a drafted player's true rating is revealed even in Scout mode");
     }
 }
