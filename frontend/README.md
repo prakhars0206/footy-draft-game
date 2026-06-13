@@ -24,11 +24,12 @@ npm run dev          # http://localhost:5173  (proxies /api -> :8080)
 ## Structure
 - `src/api.ts` — typed client + DTO types (mirrors `com.draft.footy.api`).
 - `src/theme.ts` — line colours, per-formation pitch coordinates, Scout rating renderer.
-- `src/components/` — `PitchView`, `RatingBadge`, `PositionChip`, `StrengthBars`, terminal `primitives`.
-- `src/screens/` — `SetupScreen` (mission config), `DraftScreen` (spin → place → pitch → simulate),
-  `ResultsScreen` (debrief).
+- `src/components/` — `PitchView` (interactive draft pitch), `TeamPitch` (read-only squad-in-formation viewer),
+  `SpinReveal` (tier-scaled spin suspense), `RatingBadge`, `PositionChip`, `StrengthBars`, terminal `primitives`.
+- `src/screens/` — `SetupScreen` → `DraftScreen` (spin reveal → place → league panel) → `PlaybackScreen`
+  (matchday-by-matchday, animated live table) → `ResultsScreen` (debrief, clickable team viewer, proj-vs-actual).
 
-## Scope (this pass)
-Draft screen first: World Draft + Squad First, Show-Ratings On/Scout/Off (Scout shows ranges/redaction — the
-true overall never leaves the server). Deferred: Position First, Classic mode, richer setup/results, Continue
-Draft.
+## Scope
+Full playable loop for **World Draft + Squad First**, Show-Ratings On/Scout/Off (Scout shows ranges/redaction —
+the true overall never leaves the server). Deferred: Position First, Classic mode, Continue-Draft resume,
+richer setup (era slider / league picker).

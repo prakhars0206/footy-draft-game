@@ -25,7 +25,8 @@ curl -X POST localhost:8080/api/runs -H 'Content-Type: application/json' \
 curl -X POST localhost:8080/api/runs/{id}/spin                                              # squad w/ Scout ranges
 curl -X POST localhost:8080/api/runs/{id}/draft -H 'Content-Type: application/json' \
   -d '{"slotPosition":"GK","sofifaId":123}'                                                 # natural positions only
-curl -X POST localhost:8080/api/runs/{id}/simulate                                          # full SeasonView
+curl localhost:8080/api/runs/{id}/preview                                                   # opponents + league-aware projection (GET)
+curl -X POST localhost:8080/api/runs/{id}/simulate                                          # -> SeasonReplay {matchdays, debrief}
 
 mvn test                                              # engine invariants
 
@@ -41,19 +42,19 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
 - `com.draft.footy` — pure-Java engine, **no Spring imports** (keeps it unit-testable and portable):
     - `FifaDataLoader` — CSV → top-5-league `ClubSeason`s. **Schema-flexible + multi-edition**: column-alias resolver (`player_id`|`sofifa_id`, `club_name`|`club`, …); top-5 filter prefers the stable numeric `league_id` (13/53/31/19/16) and falls back to a name-alias set; reads a per-row `fifa_version` so the combined export yields one `ClubSeason` per (club, edition). `loadAllSeasons(path)` for the multi-edition file; `loadTop5(path, edition)` is the single-season wrapper.
     - `PrimeIndex` — career-best ("Prime Mode") lookup: groups by `player_id`, keeps the peak-`overall` row (rating + positions from the **same** edition). Applied to the **user XI only** (invariant 6); a no-op on single-edition data.
-    - `ClubSeason` / `Xi` — `optimalXi()` fields a club's best-fit XI: tries all 7 formations and picks the one with the most **natural-position** fits (overall as tiebreak), cached. `buildXi(formation)` fills a single formation, with fallbacks that keep keepers out of outfield slots and vice versa. `Xi` carries attack/mid/def/gk sub-scores.
-    - `OpponentPyramid` — 19 opponents sampled by **`optimalStrength()`** tier (no fixed formation), bounded randomization, deduped, sums to 19. Each opponent fields its own best-fit shape.
-    - `MatchEngine` — seeded-RNG Poisson scoreline; scorer/assist chosen by **position weight (`ScoringWeights`) × `ratingFactor(overall)`** (baseline-shifted `((overall-55)/45)²`, so higher-rated players grab a clearly larger share — tune the exponent in `ratingFactor`).
+    - `ClubSeason` / `Xi` — `optimalXi()` fields a club's best-fit XI: tries all 7 formations, picks the one with the most **natural-position** fits (overall tiebreak), cached. `buildXi(formation)` does an **optimal max bipartite matching** (Kuhn, strongest-first) — augmenting paths re-route already-placed players so a star is never benched when forwards share positions (the old greedy dropped e.g. Mbappé and under-rated elite clubs). Safe fallbacks keep keepers in goal. `Xi` carries attack/mid/def/gk sub-scores.
+    - `OpponentPyramid` — 19 opponents sampled by **`optimalStrength()`** tier, bounded randomization, **deduped by club** (no two eras of the same club), sums to 19. Tier bounds are tuned in `TIERS`.
+    - `MatchEngine` — seeded-RNG **Dixon-Coles** scoreline (`sampleScore`); scorer/assist chosen by **position weight (`ScoringWeights`) × `ratingFactor(overall)`** (baseline-shifted `((overall-55)/45)²` — higher-rated players grab a clearly larger share; tune the exponent in `ratingFactor`).
     - `ScoringWeights` — per-position goal/assist propensity. **Attribution only — does NOT affect scorelines or points**, so tune freely against the leaderboards.
-    - `SeasonSimulator` — 380-game round-robin, **league-wide** stat ledger keyed per (team, player), table, awards.
-    - `Projection` — Layer-1 "bookies" expected points + finish odds.
+    - `SeasonSimulator` — **38-matchday calendar** (circle-method round-robin) over 20 teams; **league-wide** stat ledger per (team, player); retains the **match log** (scorers/minutes) + a **table snapshot after each matchday** (`SeasonResult.matchdays`) for playback; table, awards.
+    - `Projection` — Layer-1 "bookies" expected-points curve + odds, fitted to the actual sim. `LeagueProjection` (api) makes it **league-aware**: a team's effective overall is shifted by the mean of the other 19, so the same rating projects differently in a soft vs brutal league. Used by both the pre-sim preview and the debrief so they always agree.
     - Run-config enums (`Difficulty`/`ShowRatings`/`DraftMode`/`PlayerRatings`/`LeagueScope`/`RunStatus`) + `ScoutRatings` — Scout fuzzy band (§8), **deterministic from `(sofifaId, runSeed)`**, asymmetric so it can't be reverse-averaged.
 - `com.draft.footy.persistence` — JPA layer (cert practice): relational `ClubSeasonEntity` ↔ `PlayerEntity` (positions in an ordered join table), `ClubSeasonRepository` (derived `findByLeague`/`findByLeagueAndSeason` + a `findAllWithPlayers` fetch-join), `EngineMapper` (entity ⇄ engine record, both ways), `DataSeeder` (`@PostConstruct`: CSV → entities → H2). **DraftRun** aggregate: `DraftRunEntity` ↔ `DraftSlotEntity` (UUID-keyed run state, config, seed, rerolls, current spin, 11 slots with filled snapshots) + `DraftRunRepository`. Keeps JPA out of the pure engine.
 - `com.draft.footy.api` — Spring layer wrapping the engine.
     - `GameCatalog` — shared loaded pool (`clubs`/`pool`/`primeIndex` + `eligibleClubSeasons(scope, league, era…)`); `@PostConstruct` after `DataSeeder`, race-free. Consumed by both services.
-    - `SimulationController` (`GET /api/season/demo`, `&prime=true`) — stateless demo. `SeasonViewMapper` renders the shared season JSON for both demo and draft (and carries the `you`-flag fix — compares against `result.userStanding().team`).
-    - `DraftRunController` / `DraftRunService` — **stateful draft flow** (§3/§5B/§16): `POST /api/runs` → `/{id}/spin` → `/{id}/draft` → `/{id}/move` → `/{id}/simulate`, server-authoritative, seeded for replay. Ratings render per `ShowRatings`: ON exact / SCOUT range only / OFF hidden — **the true overall never reaches the client in SCOUT/OFF**, and live strength is gated to ON so the aggregate can't leak it. *(World Draft + Squad First wired; Position First + Classic/§5b rejected at create for now.)*
-- `frontend/` — **React scout-dossier SPA** (Vite + React + TS + Tailwind v4 + Framer Motion), tactical intel-terminal theme. View machine `setup → draft → results` (`App.tsx`); typed client `src/api.ts`; `src/theme.ts` (line colours + per-formation pitch coords + Scout rating renderer); `src/screens/` + `src/components/PitchView`. Talks to the backend via a Vite `/api` proxy. See `frontend/README.md`.
+    - `SimulationController` (`GET /api/season/demo`, `&prime=true`) — stateless demo. `SeasonViewMapper` builds the shared season JSON: `toView` (debrief, with each team's formation-ordered XI + per-player stats + projected-pos/points) and `toReplay` (the matchday log + debrief). `TeamLayout.inFormationOrder` re-pairs an XI's slots onto its formation for the pitch viewer.
+    - `DraftRunController` / `DraftRunService` — **stateful draft flow** (§3/§5B/§16): `POST /api/runs` → `/{id}/spin` (carries club strength + tier) → `/{id}/draft` (returns the drafted-from squad **declassified**) → `/{id}/move` → `GET /{id}/preview` (the opponent league + league-aware projection) → `/{id}/simulate` (returns a **`SeasonReplayView`** = matchdays + debrief). Server-authoritative, seeded for replay. Ratings per `ShowRatings`: ON exact / SCOUT range / OFF hidden — true overall never reaches the client in SCOUT/OFF; drafted players are revealed on your own pitch. *(World Draft + Squad First wired; Position First + Classic/§5b rejected at create.)*
+- `frontend/` — **React scout-dossier SPA** (Vite + React + TS + Tailwind v4 + Framer Motion), tactical intel-terminal theme. View machine `setup → draft → playback → results` (`App.tsx`). Screens: `SetupScreen`, `DraftScreen` (spin → **`SpinReveal`** tier-scaled suspense → place onto `PitchView` → league panel w/ opponent scouting via `TeamPitch`), **`PlaybackScreen`** (matchday-by-matchday, live table reorders via Framer Motion `layout`, controls + keyboard), `ResultsScreen` (debrief, ACTUAL/PROJECTED table, click any team → `TeamPitch` + stats). Typed client `src/api.ts`; `src/theme.ts` (line colours + per-formation pitch coords + Scout renderer). Vite `/api` proxy. See `frontend/README.md`.
 
 ## Invariants — do not break these
 
@@ -66,21 +67,23 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
 
 ## Tuning map — two separate concerns, two files
 
-**Match volume & outcomes (COUPLED to points!) → `MatchEngine` constants.**
-Model: `lambda = min(BASE_GOALS * exp((attack - defence + home) / SCALE), MAX_LAMBDA)`; the scoreline is then drawn from the **Dixon-Coles** joint distribution (`sampleScore`) rather than two independent Poissons.
-- `BASE_GOALS` (1.25) — global goal-volume multiplier; lower = fewer goals everywhere, uniformly.
-- `SCALE` (14.5) — larger = strength gaps matter less (fewer blowouts); also a strong **points** lever — raising it lowers top-team points. *Inversely affects the draw rate* (more decisive games = fewer draws).
-- `HOME_ADV` (4.5) — shifts goals/edge from away to home.
-- `MAX_LAMBDA` (4.5) — caps per-team expected goals; lowering trims blowouts with little points impact (safest lever).
-- `RHO` (-0.11) — Dixon-Coles low-score correction; more negative ⇒ more 0-0/1-1 draws. Lifts the draw rate fairly independently of the points spread, so it's the lever for draws after `SCALE` sets the spread. (Slightly coupled to points: more draws cost favourites.)
-- **After ANY change here, re-run the calibration sweep** (`java -cp out com.draft.footy.Demo players_22.csv` — the locked single-season reference): the 89/90 rows must stay near ~92/~94, the curve must stay monotonic, and the league draw rate near ~24%.
+**Match volume & outcomes (COUPLED to points!) → `MatchEngine` constants** (current values live in the code — being actively tuned; don't hardcode them here).
+Model: `lambda = min(BASE_GOALS * exp((attack - defence + home) / SCALE), MAX_LAMBDA)`; the scoreline is then drawn from the **Dixon-Coles** joint distribution (`sampleScore`).
+- `BASE_GOALS` — global goal-volume multiplier; lower = fewer goals everywhere, uniformly.
+- `SCALE` — larger = strength gaps matter less (fewer blowouts); also a strong **points** lever (raising it lowers top-team points). *Inversely affects the draw rate.*
+- `HOME_ADV` — shifts edge from away to home.
+- `MAX_LAMBDA` — caps per-team expected goals; **lowering trims blowouts** (the lever for "too many goals" in a strong team's matches) with little points impact.
+- `RHO` — Dixon-Coles low-score correction; more negative ⇒ more 0-0/1-1 draws. The lever for the draw rate, fairly independent of the points spread.
+- **After ANY change here, re-run the calibration sweep** (`java -cp out com.draft.footy.Demo players_22.csv`): keep the 89/90 rows near their projection, the curve monotonic, the draw rate ~24%, and league avg ~2.7–2.9 goals/game.
 
-**Who on a team scores (NO points impact) → `ScoringWeights`.**
-Per-position goal/assist weights. Validate by eyeballing the leaderboards: top scorer ~28–34, creators (wingers/CAMs) lead assists, no CDM/CB topping either.
+**Who on a team scores (NO points impact) → `ScoringWeights` + `MatchEngine.ratingFactor`.**
+Per-position weights × rating factor. Validate by eyeballing the leaderboards: top scorer ~30–40, creators (wingers/CAMs) lead assists, no CDM/CB topping either. Steepen `ratingFactor` (square → cube) to concentrate goals on stars more.
 
-## Calibration (validated)
+## Calibration (in active tuning)
 
-On the locked **players_22** reference: 89 → ~92 pts (projected 92), 90 → ~94 (projected 95) — top end locked onto the projection; monotonic; **league draw rate ~24%** (Dixon-Coles lifts it from ~17% pure-Poisson into a realistic band). Lower rows run under projection (the opponent pyramid is the same tough league regardless of the user). On the **multi-season** pool the deeper era spread runs a touch under (90 → ~92, draws ~18%). **38-0 ~0% on single-season FIFA-22** — you can't build a true 92+ all-time XI from one edition; multi-season unlocks the rare-but-real perfect season.
+Targets: monotonic (stronger → more points), top end ~92–94 pts for a 90-rated XI, **draw rate ~24%**, **~2.7–2.9 goals/game** league-wide, 38-0 rare-but-possible. The `Demo players_22.csv` sweep is the reference. Two recent shifts to remember:
+- The **optimalXi (Kuhn) fix** made opponents legitimately stronger → the **projection curve (`Projection.expectedPoints`) is now ~1–1.5 optimistic at the top** and should be re-fit once the `MatchEngine` constants settle (it's tied to whatever the sim actually produces).
+- Constants are being hand-tuned, so exact numbers drift; re-run the sweep after changes. **38-0 ~0% on single-season FIFA-22** — multi-season unlocks the rare-but-real perfect season.
 
 ## Status & roadmap
 
@@ -90,13 +93,17 @@ On the locked **players_22** reference: 89 → ~92 pts (projected 92), 90 → ~9
     - ✅ **JPA + H2 seeding** (cert practice, not perf) — relational `ClubSeasonEntity`↔`PlayerEntity` + ordered positions join table; `DataSeeder` seeds H2 from the CSV at startup, `SimulationService` reads it back via the repository. H2 console at `/h2-console` (`jdbc:h2:mem:footy`). See `com.draft.footy.persistence`.
     - ✅ **Dixon-Coles draw correction** — `MatchEngine.sampleScore` draws correlated scorelines from the DC joint distribution (`RHO`), lifting the draw rate from ~17% (pure Poisson) to ~24%. Recalibrated (`SCALE` 16→14.5, `RHO` -0.11) so players_22 holds 89→~92 / 90→~94. See the tuning map above.
     - ℹ️ **Calibration:** locked on the single-season **players_22** reference (`Demo players_22.csv`). The deeper multi-era pool runs a touch under (90 → ~92, draws ~18%) — expected, the opponent pyramid is the same tough league regardless of the user. `EngineTest` calibration assertions pin to `players_22.csv`.
-- **Phase 2 (in progress):**
-    - ✅ **Stateful `DraftRun` REST resource** — `POST /api/runs` → `/{id}/spin` `/draft` `/move` `/simulate`, persisted in H2, server-authoritative, seed-replayable (`DraftRunController`/`DraftRunService`). World Draft + Squad First; natural-positions-only placement; difficulty rerolls + free-reroll dead-end safeguard; Prime/Career; era filter.
-    - ✅ **Scout fuzzy-ratings** (headline) — `ShowRatings` ON/SCOUT/OFF at the DTO boundary; true overall stripped in SCOUT/OFF, live strength gated to ON (`ScoutRatings`, deterministic from `(sofifaId, runSeed)`).
-    - ✅ **React scout-dossier frontend — draft screen** (Vite + React + TS + Tailwind v4 + Framer Motion), tactical intel-terminal theme. Playable loop: mission-config setup → spin/place onto a pitch + live strength + reroll/move → simulate → debrief. Scout ratings render as ranges/redaction; juicy reveal animations. See `frontend/`. *(Draft-screen-first scope; minimal setup + basic results.)*
-    - ⏳ **Frontend polish** (next pass): richer setup (era slider, league picker), full match log + share on results, Continue-Draft resume, deeper animation.
-    - ⏳ **Position First** draft mode; **Classic** single-league + §5b "global team in one real league" (needs real-league opponents, not the pyramid) — later passes; rejected at `create` for now.
-- **Phase 3:** AI legends pack (icons retired pre-2014, absent from FIFA data); async LLM flavor text (never block the results endpoint).
+- **Phase 2 (largely done — full playable loop):**
+    - ✅ **Stateful `DraftRun` REST resource** (persisted H2, server-authoritative, seed-replayable). World Draft + Squad First; natural-positions-only; difficulty rerolls + free-reroll safeguard; Prime/Career; era filter.
+    - ✅ **Scout fuzzy-ratings** (headline) — ON/SCOUT/OFF; true overall stripped in SCOUT/OFF; drafted players revealed on your own pitch; declassify reveal only in SCOUT/OFF.
+    - ✅ **React scout-dossier frontend** — tactical intel-terminal theme; full loop setup → draft → playback → debrief.
+    - ✅ **Tier-scaled spin reveal** (`SpinReveal`) — suspense scan then club lands with flair scaled to its strength tier (Juggernaut/Contender = epic).
+    - ✅ **Pre-sim league** — opponent list + per-team scouting (`TeamPitch`) + **league-aware projection**; consistent with the debrief.
+    - ✅ **Rich results** — formation team-viewer with per-player stats for *any* team (click the table), Golden Boot/Playmaker/Golden Glove (GK-only)/Player of the Season, **ACTUAL/PROJECTED table + proj-vs-actual** movement, **position-based over/under verdict**.
+    - ✅ **Matchday playback** (`PlaybackScreen`) — watch the season unfold: animated live table, matchday results with scorers, play/pause + speed + step + skip + keyboard.
+    - ⏳ **Next:** re-fit the projection once constants settle; pre-sim projected points on the league screen; Scout-precision setting; richer setup (era slider, league picker); Continue-Draft resume; possible UI overhaul.
+    - ⏳ **Position First** draft mode; **Classic** single-league + §5b "global team in one real league" (needs real-league opponents) — rejected at `create` for now.
+- **Phase 3:** AI legends pack (icons retired pre-2014); async LLM flavour text (never block the results endpoint). Deeper playback (per-minute ticker / commentary). Monte-Carlo projection (the "real bookies" method — simulate the season N times).
 
 ## Conventions
 

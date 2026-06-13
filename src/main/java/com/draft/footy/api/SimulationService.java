@@ -24,8 +24,6 @@ public class SimulationService {
         return new SeasonSimulator().simulate(userXi, opponents, rng);
     }
 
-    public Projection.Odds projection(int overall) { return Projection.odds(overall); }
-
     /**
      * Builds an XI near a target overall. When {@code prime} is set, each drafted player is swapped for their
      * career-best snapshot (Prime Mode) — applied to the user XI only; opponents keep their sampled season.

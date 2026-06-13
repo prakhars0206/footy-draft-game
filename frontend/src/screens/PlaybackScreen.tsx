@@ -8,7 +8,7 @@ const BASE_MS = 1100 // matchday advance interval at 1x
 export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onFinish: () => void }) {
   const total = replay.matchdays.length
   const [md, setMd] = useState(0)
-  const [playing, setPlaying] = useState(true)
+  const [playing, setPlaying] = useState(false) // start paused — the user presses PLAY when ready
   const [speed, setSpeed] = useState(1)
   const atEnd = md >= total - 1
 
