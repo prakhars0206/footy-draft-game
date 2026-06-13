@@ -7,6 +7,7 @@ import type {
 import { lineClasses, lineOf } from '../theme'
 import { PitchView } from '../components/PitchView'
 import { TeamPitch } from '../components/TeamPitch'
+import { SpinReveal } from '../components/SpinReveal'
 import { RatingBadge } from '../components/RatingBadge'
 import { PositionChip } from '../components/PositionChip'
 import { Panel, Prompt, Stamp } from '../components/primitives'
@@ -35,6 +36,7 @@ export function DraftScreen({
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [declassified, setDeclassified] = useState<{ club: string; season: string; players: DeclassifiedPlayer[] } | null>(null)
+  const [revealing, setRevealing] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [inspect, setInspect] = useState<LeagueTeam | null>(null)
 
@@ -65,7 +67,7 @@ export function DraftScreen({
       setScanning(true)
       try {
         const s = await api.spin(run.runId)
-        setSpin(s); setSelected(null); setMoveFrom(null)
+        setSpin(s); setSelected(null); setMoveFrom(null); setRevealing(true)
         onRun({ ...run, rerollsRemaining: s.rerollsRemaining })
       } finally { setScanning(false) }
     })
@@ -73,7 +75,7 @@ export function DraftScreen({
   const doDraft = (slotPosition: string, sofifaId: number) =>
     guard(async () => {
       const res = await api.draft(run.runId, slotPosition, sofifaId)
-      onRun(res.state); setSpin(null); setSelected(null)
+      onRun(res.state); setSpin(null); setSelected(null); setRevealing(false)
       // The "who you passed on" reveal only adds value when ratings were hidden — skip it in full-ratings mode.
       if (run.showRatings !== 'ON') setDeclassified({ club: res.club, season: res.season, players: res.declassified })
     })
@@ -130,6 +132,8 @@ export function DraftScreen({
                 <span className="absolute inset-2 border border-phosphor/30" />
               </motion.button>
             </Panel>
+          ) : revealing ? (
+            <SpinReveal spin={spin} onAccess={() => setRevealing(false)} />
           ) : (
             <SquadPanel
               spin={spin} selected={selected} busy={busy} canReroll={run.rerollsRemaining > 0}
@@ -138,7 +142,7 @@ export function DraftScreen({
             />
           )}
           {error && <div className="mt-2 shrink-0 border border-danger/50 bg-danger/10 p-2 text-sm text-danger">! {error}</div>}
-          {!complete && !declassified && (
+          {!complete && !declassified && !revealing && (
             <div className="mt-2 shrink-0 text-[10px] text-ink/40">
               {moveFrom != null ? '> select a highlighted slot to reposition · click the player again to cancel'
                 : selected ? '> select a highlighted pitch slot, or use DEPLOY below'

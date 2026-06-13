@@ -120,6 +120,8 @@ export interface SpinView {
   club: string
   season: string
   league: string | null
+  strength: number
+  tier: string
   rerollsRemaining: number
   squad: SquadPlayer[]
 }

@@ -43,8 +43,8 @@ public class DraftRunController {
     public record SpinInfo(String club, String season, String league) { }
     public record SquadPlayerView(int sofifaId, String name, String nation, List<String> positions,
                                   RatingView rating, List<String> eligibleSlots) { }
-    public record SpinView(String club, String season, String league, int rerollsRemaining,
-                           List<SquadPlayerView> squad) { }
+    public record SpinView(String club, String season, String league, int strength, String tier,
+                           int rerollsRemaining, List<SquadPlayerView> squad) { }
     /** A drafted-from squad revealed after a pick (true ratings) — learn who you passed on. */
     public record DeclassifiedPlayer(int sofifaId, String name, String position, String line, int overall,
                                      boolean draftedByYou) { }
@@ -171,7 +171,9 @@ public class DraftRunController {
                 rating(run, active.id(), active.overall()), eligible));
         }
         rows.sort((a, b) -> Integer.compare(scoutOrExact(b), scoutOrExact(a))); // strongest first (band high in Scout)
-        return new SpinView(squad.club, squad.season, squad.league, run.getRerollsRemaining(), rows);
+        int strength = squad.optimalStrength();
+        return new SpinView(squad.club, squad.season, squad.league, strength, tierLabel(strength),
+            run.getRerollsRemaining(), rows);
     }
 
     /** Renders a rating per the run's Show-Ratings mode — the true overall is omitted in SCOUT and OFF. */
