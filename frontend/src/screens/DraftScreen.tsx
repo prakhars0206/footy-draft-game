@@ -13,10 +13,10 @@ import { Panel, Prompt, Stamp } from '../components/primitives'
 
 const TIER_COLOR: Record<string, string> = {
   JUGGERNAUT: 'text-amber border-amber',
-  CONTENDER: 'text-phosphor border-phosphor',
-  EUROPEAN: 'text-def border-def',
+  "TITLE CONTENDER": 'text-phosphor border-phosphor',
+  "EUROPEAN CHASER": 'text-def border-def',
   'MID-TABLE': 'text-ink border-edge-bright',
-  SCRAPPER: 'text-danger border-danger',
+  "RELEGATION SCRAPPER": 'text-danger border-danger',
 }
 
 export function DraftScreen({
@@ -74,7 +74,8 @@ export function DraftScreen({
     guard(async () => {
       const res = await api.draft(run.runId, slotPosition, sofifaId)
       onRun(res.state); setSpin(null); setSelected(null)
-      setDeclassified({ club: res.club, season: res.season, players: res.declassified })
+      // The "who you passed on" reveal only adds value when ratings were hidden — skip it in full-ratings mode.
+      if (run.showRatings !== 'ON') setDeclassified({ club: res.club, season: res.season, players: res.declassified })
     })
 
   const onPitchClick = (slot: Slot) => {
@@ -326,7 +327,7 @@ function SquadPanel({
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="w-full max-w-md border-2 border-edge-bright bg-panel p-5" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
+      <motion.div className="w-full max-w-lg border-2 border-edge-bright bg-panel p-5" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
         {children}
       </motion.div>
     </motion.div>

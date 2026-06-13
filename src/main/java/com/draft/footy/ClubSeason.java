@@ -61,31 +61,46 @@ public final class ClubSeason {
 
     /** Fields the strongest XI for a SPECIFIC formation, respecting natural positions and safe fallbacks. */
     public Xi buildXi(Formation formation) {
-        // Appending the formation to the name so it shows up beautifully in the final table
-        Xi xi = new Xi(label() + " (" + formation.label() + ")");
+        List<String> slots = formation.slots();
+        Player[] slotOf = new Player[slots.size()];
+
+        // Maximum bipartite matching (Kuhn): add players strongest-first so the best are prioritised — an
+        // augmenting path RE-ROUTES an already-placed player to another open slot instead of benching the
+        // higher-rated newcomer (the old greedy could drop a 91 like Mbappé when forwards shared positions).
+        List<Player> byRating = roster.stream()
+            .sorted(Comparator.comparingInt(Player::overall).reversed()).toList();
         Set<Integer> used = new HashSet<>();
-        List<String> ordered = new ArrayList<>(formation.slots());
-        ordered.sort(Comparator.comparingInt(this::candidateCount)); // most-constrained first
-
-        for (String slot : ordered) {
-            Player pick = roster.stream()
-                    .filter(p -> !used.contains(p.id()) && p.canPlay(slot))
-                    .max(Comparator.comparingInt(Player::overall))
-                    .orElseGet(() -> roster.stream() // Fallback 1: Highest rated player OF THE SAME TYPE (Outfield vs GK)
-                            .filter(p -> !used.contains(p.id()))
-                            .filter(p -> p.primaryPosition().equals("GK") == slot.equals("GK"))
-                            .max(Comparator.comparingInt(Player::overall))
-                            .orElseGet(() -> roster.stream() // Fallback 2: Sudden death literal remaining
-                                    .filter(p -> !used.contains(p.id()))
-                                    .max(Comparator.comparingInt(Player::overall))
-                                    .orElse(null)));
-
-            if (pick != null) { xi.add(slot, pick); used.add(pick.id()); }
+        for (Player p : byRating) {
+            if (augment(p, slots, slotOf, new boolean[slots.size()])) used.add(p.id());
         }
+
+        // Any slot with no natural player gets a safe fallback (keepers stay in goal, outfielders out of it).
+        for (int i = 0; i < slots.size(); i++) {
+            if (slotOf[i] != null) continue;
+            String slot = slots.get(i);
+            Player pick = roster.stream().filter(p -> !used.contains(p.id()))
+                .filter(p -> p.primaryPosition().equals("GK") == slot.equals("GK"))
+                .max(Comparator.comparingInt(Player::overall))
+                .orElseGet(() -> roster.stream().filter(p -> !used.contains(p.id()))
+                    .max(Comparator.comparingInt(Player::overall)).orElse(null));
+            if (pick != null) { slotOf[i] = pick; used.add(pick.id()); }
+        }
+
+        Xi xi = new Xi(label() + " (" + formation.label() + ")"); // formation in the name -> shows in the table
+        for (int i = 0; i < slots.size(); i++) if (slotOf[i] != null) xi.add(slots.get(i), slotOf[i]);
         return xi;
     }
 
-    private int candidateCount(String slot) {
-        return (int) roster.stream().filter(p -> p.canPlay(slot)).count();
+    /** Kuhn augmenting step: seat {@code p} in a natural slot, re-routing the current occupant if necessary. */
+    private boolean augment(Player p, List<String> slots, Player[] slotOf, boolean[] tried) {
+        for (int i = 0; i < slots.size(); i++) {
+            if (tried[i] || !p.canPlay(slots.get(i))) continue;
+            tried[i] = true;
+            if (slotOf[i] == null || augment(slotOf[i], slots, slotOf, tried)) {
+                slotOf[i] = p;
+                return true;
+            }
+        }
+        return false;
     }
 }

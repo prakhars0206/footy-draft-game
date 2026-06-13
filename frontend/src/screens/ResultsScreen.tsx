@@ -11,10 +11,12 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
   const [team, setTeam] = useState<TeamRow | null>(null)
 
   const proj = season.projection.expectedPoints
-  const delta = season.points - proj
+  const projPos = season.table.find((t) => t.you)?.projectedPos ?? season.finishPos
+  const move = projPos - season.finishPos // + = finished HIGHER than the bookies projected
+  // Verdict is the achievement (where you finished vs where you were projected) — what actually matters in a season.
   const verdict =
-    delta >= 6 ? { text: 'OVERPERFORMED', tone: 'phosphor' as const }
-      : delta <= -6 ? { text: 'UNDERPERFORMED', tone: 'danger' as const }
+    move >= 3 ? { text: 'OVERPERFORMED', tone: 'phosphor' as const }
+      : move <= -3 ? { text: 'UNDERPERFORMED', tone: 'danger' as const }
         : { text: 'AS EXPECTED', tone: 'amber' as const }
   const unbeaten = season.lost === 0
   const perfect = season.won === 38
@@ -32,7 +34,9 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
           <div className="text-xs tracking-mega text-ink/50">FINAL STANDING</div>
           <div className="my-2 text-6xl font-extrabold text-ink-bright glow-phosphor">{ordinal(season.finishPos)}</div>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <span className="text-sm text-ink/60">projected {proj} pts · finished {season.points} pts</span>
+            <span className="text-sm text-ink/60">
+              projected {ordinal(projPos)} ({proj} pts) → finished {ordinal(season.finishPos)} ({season.points} pts)
+            </span>
             <Stamp text={verdict.text} tone={verdict.tone} />
           </div>
           {unbeaten && !perfect && <div className="mt-2 text-sm text-phosphor">◆ UNBEATEN — {season.won}W {season.drawn}D</div>}
@@ -196,7 +200,7 @@ function Leaders({ title, rows, unit }: { title: string; rows: SeasonView['golde
 function Backdrop({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="w-full max-w-md border-2 border-edge-bright bg-panel p-5" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>{children}</motion.div>
+      <motion.div className="w-full max-w-lg border-2 border-edge-bright bg-panel p-5" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>{children}</motion.div>
     </motion.div>
   )
 }

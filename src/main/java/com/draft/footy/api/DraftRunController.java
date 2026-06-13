@@ -153,11 +153,11 @@ public class DraftRunController {
     }
 
     private static String tierLabel(int strength) {
-        if (strength >= 90) return "JUGGERNAUT";
-        if (strength >= 85) return "CONTENDER";
-        if (strength >= 80) return "EUROPEAN";
-        if (strength >= 75) return "MID-TABLE";
-        return "SCRAPPER";
+        if (strength >= 87) return "JUGGERNAUT";
+        if (strength >= 83) return "TITLE CONTENDER";
+        if (strength >= 78) return "EUROPEAN CHASER";
+        if (strength >= 72) return "MID-TABLE";
+        return "RELEGATION SCRAPPER";
     }
 
     private SpinView toSpin(DraftRunEntity run, ClubSeason squad) {

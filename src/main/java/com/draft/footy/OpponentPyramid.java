@@ -14,11 +14,11 @@ public final class OpponentPyramid {
     record Tier(String label, int min, int max, int baseCount, int lo, int hi) {}
 
     static final List<Tier> TIERS = List.of(
-        new Tier("Juggernaut",          90, 99, 1, 0, 2),
-        new Tier("Title contender",     85, 89, 3, 2, 4),
-        new Tier("European chaser",     80, 84, 5, 4, 6),
-        new Tier("Mid-table",           75, 79, 6, 3, 9),  // balancer (flex)
-        new Tier("Relegation scrapper", 60, 74, 4, 3, 5)
+        new Tier("Juggernaut",          87, 99, 1, 0, 2),
+        new Tier("Title contender",     83, 86, 3, 2, 4),
+        new Tier("European chaser",     78, 82, 5, 4, 6),
+        new Tier("Mid-table",           72, 77, 6, 3, 9),  // balancer (flex)
+        new Tier("Relegation scrapper", 58, 71, 4, 3, 5)
     );
 
     static final int LEAGUE_SIZE = 20;     // you + 19 opponents

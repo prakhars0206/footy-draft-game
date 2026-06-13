@@ -8,8 +8,8 @@ import java.util.Random;
 public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
-    static final double BASE_GOALS = 1.25;  // league-average goals per team in a balanced game
-    static final double SCALE      = 14.5;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double BASE_GOALS = 1.21;  // league-average goals per team in a balanced game
+    static final double SCALE      = 15.9;  // how sharply strength gaps translate to goals (larger = gentler)
     static final double HOME_ADV   = 4.5;   // home edge, in overall-rating points
     static final double MAX_LAMBDA = 4.5;   // clamp to avoid absurd blowouts
 
@@ -58,7 +58,7 @@ public final class MatchEngine {
      */
     static double ratingFactor(int overall) {
         double r = Math.max(0.0, (overall - 55) / 45.0);
-        return r * r;
+        return r * r * r;
     }
 
     /** Weighted pick of a scorer (attack weights) or assister (assist weights), excluding `exclude`. */

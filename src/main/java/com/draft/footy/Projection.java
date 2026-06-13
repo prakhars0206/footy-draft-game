@@ -5,22 +5,26 @@ public final class Projection {
 
     public record Odds(int expectedPoints, double winLeague, double top4, double top6, double top10, double relegation) {}
 
-    /** Expected points from overall, anchored on ~ {75->50, 83->74, 90->95}. Clamped to a sane range. */
+    /**
+     * Expected points from overall — fitted to what teams ACTUALLY achieve in the sim (75->~39, 80->~58,
+     * 86->~80, 90->~94), rather than a naive line that over-rated weaker sides. Clamped to a realistic
+     * 38-game range (a runaway champion tops out near 100, a doomed side bottoms out in the teens).
+     */
     public static int expectedPoints(int overall) {
-        double pts = 3.0 * overall - 175.0;
-        return (int) Math.round(Math.max(20, Math.min(104, pts)));
+        double pts = 3.65 * overall - 234.5;
+        return (int) Math.round(Math.max(14, Math.min(100, pts)));
     }
 
     public static Odds odds(int overall) {
         int xp = expectedPoints(overall);
-        // crude logistic-ish bands around expected points; good enough for a pre-season "what should happen" panel
+        // Logistic bands keyed to real top-flight thresholds — a pre-season "what should happen" picture.
         return new Odds(
             xp,
-            band(xp, 92, 6),   // win league
-            band(xp, 74, 8),   // top 4
-            band(xp, 66, 9),   // top 6
-            band(xp, 52, 10),  // top 10
-            1 - band(xp, 38, 8) // relegation = below the survival line
+            band(xp, 90, 6),    // win league (~88-92 pts usually takes it)
+            band(xp, 72, 7),    // top 4 (~70-74)
+            band(xp, 64, 8),    // top 6
+            band(xp, 50, 9),    // top 10
+            1 - band(xp, 36, 5) // relegation = below the ~36-38 survival line
         );
     }
 

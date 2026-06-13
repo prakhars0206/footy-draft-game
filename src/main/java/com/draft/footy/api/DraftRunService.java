@@ -172,7 +172,8 @@ public class DraftRunService {
     }
 
     private Xi buildUserXi(DraftRunEntity run) {
-        Xi xi = new Xi("Your XI");
+        // Carry the formation in the name so the post-sim team viewer lays the XI out correctly (not a default 4-3-3).
+        Xi xi = new Xi("Your XI (" + run.getFormation() + ")");
         for (DraftSlotEntity s : run.getSlots()) xi.add(s.getPosition(), s.toPlayer());
         return xi;
     }
