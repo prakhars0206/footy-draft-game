@@ -12,8 +12,8 @@ public final class LeagueProjection {
 
     private LeagueProjection() { }
 
-    /** The opponent pyramid's tier-weighted target mean — projections are relative to this reference league. */
-    public static final int REF_MEAN = 79;
+    /** The measured opponent-pyramid mean strength — projections are relative to this reference league. */
+    public static final int REF_MEAN = 77;
 
     /** A team's effective overall given the mean strength of the rest of its league. */
     public static int effective(int overall, int meanOfOthers) {

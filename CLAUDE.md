@@ -81,9 +81,9 @@ Per-position weights × rating factor. Validate by eyeballing the leaderboards: 
 
 ## Calibration (in active tuning)
 
-Targets: monotonic (stronger → more points), top end ~92–94 pts for a 90-rated XI, **draw rate ~24%**, **~2.7–2.9 goals/game** league-wide, 38-0 rare-but-possible. The `Demo players_22.csv` sweep is the reference. Two recent shifts to remember:
-- The **optimalXi (Kuhn) fix** made opponents legitimately stronger → the **projection curve (`Projection.expectedPoints`) is now ~1–1.5 optimistic at the top** and should be re-fit once the `MatchEngine` constants settle (it's tied to whatever the sim actually produces).
-- Constants are being hand-tuned, so exact numbers drift; re-run the sweep after changes. **38-0 ~0% on single-season FIFA-22** — multi-season unlocks the rare-but-real perfect season.
+Targets: monotonic (stronger → more points), top end ~92–94 pts for a 90-rated XI, **draw rate ~24%**, **~2.7–2.9 goals/game** league-wide, 38-0 rare-but-possible. The `Demo players_22.csv` sweep is the reference.
+- **Projection (re-fit):** `Projection.expectedPoints` = `3.45·overall − 217` (least-squares to the current sim) and `LeagueProjection.REF_MEAN` = 77 (the measured pyramid mean). Now within ~1 pt of actual across the range (75→42, 86→80, 90→94 vs ~93). **The curve is tied to the `MatchEngine` constants + the opponent pyramid — re-run the sweep and refit (and re-measure REF_MEAN) whenever those move.**
+- **38-0 ~0% on single-season FIFA-22** — multi-season unlocks the rare-but-real perfect season.
 
 ## Status & roadmap
 

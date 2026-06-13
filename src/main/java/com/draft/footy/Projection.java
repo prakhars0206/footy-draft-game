@@ -6,12 +6,13 @@ public final class Projection {
     public record Odds(int expectedPoints, double winLeague, double top4, double top6, double top10, double relegation) {}
 
     /**
-     * Expected points from overall — fitted to what teams ACTUALLY achieve in the sim (75->~39, 80->~58,
-     * 86->~80, 90->~94), rather than a naive line that over-rated weaker sides. Clamped to a realistic
-     * 38-game range (a runaway champion tops out near 100, a doomed side bottoms out in the teens).
+     * Expected points from overall — least-squares fit to what teams ACTUALLY achieve in the current sim
+     * (75->~41, 80->~59, 86->~80, 90->~93). Re-fit after the optimalXi (Kuhn) change strengthened opponents;
+     * re-run `Demo players_22.csv` and refit if the MatchEngine constants move. Clamped to a realistic 38-game
+     * range (a runaway champion tops near 100, a doomed side bottoms out in the teens).
      */
     public static int expectedPoints(int overall) {
-        double pts = 3.65 * overall - 234.5;
+        double pts = 3.45 * overall - 217.0;
         return (int) Math.round(Math.max(14, Math.min(100, pts)));
     }
 
