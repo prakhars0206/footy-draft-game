@@ -9,9 +9,16 @@ public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
     static final double BASE_GOALS = 1.25;  // league-average goals per team in a balanced game
-    static final double SCALE      = 16;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double SCALE      = 14.5;  // how sharply strength gaps translate to goals (larger = gentler)
     static final double HOME_ADV   = 4.5;   // home edge, in overall-rating points
     static final double MAX_LAMBDA = 4.5;   // clamp to avoid absurd blowouts
+
+    // Dixon-Coles low-score correction: independent Poisson under-predicts 0-0/1-1 draws (scorelines are
+    // correlated). RHO < 0 shifts mass from 1-0/0-1 into 0-0/1-1, lifting the draw rate to a realistic band.
+    // Attribution is unchanged — this only shapes the scoreline. NOTE: coupled to points (more draws cost
+    // favourites), so re-run the calibration sweep after touching it.
+    static final double RHO  = -0.11;
+    static final int    GRID = 12;          // scoreline cap per side for the joint pmf (Poisson(4.5) tail beyond is ~0)
 
     public record GoalEvent(Player scorer, Player assist, int minute, boolean home) {}
 
@@ -23,8 +30,8 @@ public final class MatchEngine {
     public Result play(Xi home, Xi away, Random rng) {
         double lambdaHome = lambda(home.attackRating(), away.defenceRating(), +HOME_ADV);
         double lambdaAway = lambda(away.attackRating(), home.defenceRating(), -HOME_ADV);
-        int hg = poisson(lambdaHome, rng);
-        int ag = poisson(lambdaAway, rng);
+        int[] score = sampleScore(lambdaHome, lambdaAway, rng);
+        int hg = score[0], ag = score[1];
 
         List<GoalEvent> events = new ArrayList<>();
         for (int i = 0; i < hg; i++) events.add(makeGoal(home, true, rng));
@@ -83,11 +90,44 @@ public final class MatchEngine {
         return team.slots.get(0).player();
     }
 
-    /** Knuth's Poisson sampler on a seeded Random. */
-    static int poisson(double lambda, Random rng) {
-        double l = Math.exp(-lambda);
-        int k = 0; double p = 1.0;
-        do { k++; p *= rng.nextDouble(); } while (p > l);
-        return k - 1;
+    /**
+     * Samples a correlated scoreline from the Dixon-Coles joint distribution:
+     * P(i,j) = Poisson(i;lambda)·Poisson(j;mu)·tau(i,j). Builds the (GRID+1)² grid, applies the low-score
+     * tau correction, and draws one cell with a single uniform — keeps the season fully seed-reproducible.
+     */
+    static int[] sampleScore(double lambda, double mu, Random rng) {
+        double[] ph = poissonPmf(lambda, GRID);
+        double[] pa = poissonPmf(mu, GRID);
+
+        double total = 0;
+        for (int i = 0; i <= GRID; i++)
+            for (int j = 0; j <= GRID; j++)
+                total += ph[i] * pa[j] * tau(i, j, lambda, mu);
+
+        double roll = rng.nextDouble() * total;
+        for (int i = 0; i <= GRID; i++)
+            for (int j = 0; j <= GRID; j++) {
+                roll -= ph[i] * pa[j] * tau(i, j, lambda, mu);
+                if (roll <= 0) return new int[]{i, j};
+            }
+        return new int[]{GRID, GRID}; // failsafe (rounding)
+    }
+
+    /** Dixon-Coles dependence factor — adjusts only the four low-score cells; 1 everywhere else. */
+    static double tau(int i, int j, double lambda, double mu) {
+        if (i == 0 && j == 0) return 1 - lambda * mu * RHO;
+        if (i == 0 && j == 1) return 1 + lambda * RHO;
+        if (i == 1 && j == 0) return 1 + mu * RHO;
+        if (i == 1 && j == 1) return 1 - RHO;
+        return 1;
+    }
+
+    /** Poisson pmf over 0..cap (unnormalised tail truncation is renormalised by the caller's total). */
+    static double[] poissonPmf(double lambda, int cap) {
+        double[] p = new double[cap + 1];
+        double term = Math.exp(-lambda); // P(0)
+        p[0] = term;
+        for (int k = 1; k <= cap; k++) { term *= lambda / k; p[k] = term; }
+        return p;
     }
 }

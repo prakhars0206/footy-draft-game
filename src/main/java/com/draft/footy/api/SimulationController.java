@@ -38,11 +38,12 @@ public class SimulationController {
     public SeasonView demoSeason(
             @RequestParam(defaultValue = "90") int overall,
             @RequestParam(defaultValue = "4-3-3") String formation,
-            @RequestParam(defaultValue = "42") long seed) {
+            @RequestParam(defaultValue = "42") long seed,
+            @RequestParam(defaultValue = "false") boolean prime) {
 
         Formation f = parseFormation(formation);
-        var xi = service.buildDemoXi(overall, f);
-        var res = service.simulateDemo(overall, f, seed);
+        var xi = service.buildDemoXi(overall, f, prime);
+        var res = service.simulateDemo(overall, f, seed, prime);
         Projection.Odds o = service.projection(xi.overall());
         var user = res.userStanding();
 

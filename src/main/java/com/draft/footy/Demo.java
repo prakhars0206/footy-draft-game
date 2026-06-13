@@ -13,11 +13,18 @@ public final class Demo {
     static final Formation FORMATION = Formation.F_4_3_3;
 
     public static void main(String[] args) throws Exception {
-        Path csv = Path.of(args.length > 0 ? args[0] : "players_22.csv");
-        List<ClubSeason> clubs = FifaDataLoader.loadTop5(csv, 22);
+        Path csv = Path.of(args.length > 0 ? args[0] : "data/male_players_all.csv");
+        // A legacy single-season file (players_NN.csv) has no fifa_version column — load it for that edition;
+        // otherwise use the multi-edition path (per-row fifa_version).
+        var m = java.util.regex.Pattern.compile("players_(\\d+)").matcher(csv.getFileName().toString());
+        List<ClubSeason> clubs = m.find()
+            ? FifaDataLoader.loadTop5(csv, Integer.parseInt(m.group(1)))
+            : FifaDataLoader.loadAllSeasons(csv);
         List<Player> pool = new ArrayList<>();
         for (ClubSeason cs : clubs) pool.addAll(cs.roster);
-        System.out.printf("Loaded %d top-5 club-seasons, %d players (FIFA 22).%n%n", clubs.size(), pool.size());
+        long seasons = clubs.stream().map(c -> c.season).distinct().count();
+        System.out.printf("Loaded %d top-5 club-seasons across %d editions, %d player-seasons.%n%n",
+            clubs.size(), seasons, pool.size());
 
         // ---------- One detailed example season (a strong ~90 XI) ----------
         Xi userXi = buildXi(pool, 90, "Your XI");
@@ -36,8 +43,14 @@ public final class Demo {
         System.out.printf("ACTUAL: %dst-ish (pos %d)  —  %dW %dD %dL  %d pts  (GF %d / GA %d)  %s%n",
             res.userPosition(), res.userPosition(), u.won, u.drawn, u.lost, u.points(), u.gf, u.ga,
             verdict(odds.expectedPoints(), u.points()));
-        System.out.printf("Biggest win margin: +%d   Longest win streak: %d%n%n",
+        System.out.printf("Biggest win margin: +%d   Longest win streak: %d%n",
             res.biggestWinFor(), res.longestWinStreak());
+
+        int totalDrawnEntries = 0, totalGf = 0;
+        for (SeasonSimulator.Standing s : res.table()) { totalDrawnEntries += s.drawn; totalGf += s.gf; }
+        int games = res.table().size() * (res.table().size() - 1); // home+away round robin
+        System.out.printf("League draw rate: %.1f%%   avg goals/game: %.2f%n%n",
+            100.0 * (totalDrawnEntries / 2.0) / games, (double) totalGf / games);
 
         System.out.println("Final table (top 6 + your team):");
         List<SeasonSimulator.Standing> t = res.table();
