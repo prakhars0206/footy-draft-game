@@ -176,6 +176,42 @@ export interface SeasonView {
   playerOfSeason: PlayerAward | null
 }
 
+// ---- matchday playback ----
+export interface Goal {
+  scorer: string
+  minute: number
+  home: boolean
+}
+export interface MatchResult {
+  home: string
+  away: string
+  homeGoals: number
+  awayGoals: number
+  userMatch: boolean
+  goals: Goal[]
+}
+export interface SnapRow {
+  team: string
+  you: boolean
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  gf: number
+  ga: number
+  gd: number
+  points: number
+}
+export interface Matchday {
+  number: number
+  matches: MatchResult[]
+  table: SnapRow[]
+}
+export interface SeasonReplay {
+  matchdays: Matchday[]
+  debrief: SeasonView
+}
+
 export interface CreateRunConfig {
   formation?: string
   difficulty?: Difficulty
@@ -218,5 +254,5 @@ export const api = {
   move: (id: string, fromSlot: number, toSlot: number) =>
     req<RunState>(`/${id}/move`, 'POST', { fromSlot, toSlot }),
   preview: (id: string) => req<Preview>(`/${id}/preview`, 'GET'),
-  simulate: (id: string) => req<SeasonView>(`/${id}/simulate`, 'POST'),
+  simulate: (id: string) => req<SeasonReplay>(`/${id}/simulate`, 'POST'),
 }

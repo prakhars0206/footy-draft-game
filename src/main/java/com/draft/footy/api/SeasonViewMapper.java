@@ -33,6 +33,16 @@ public final class SeasonViewMapper {
         List<TeamRow> table, List<StatRow> goldenBoot, List<StatRow> topAssists, List<StatRow> goldenGlove,
         PlayerAward playerOfSeason) { }
 
+    // ---- matchday playback ----
+    public record GoalView(String scorer, int minute, boolean home) { }
+    public record MatchView(String home, String away, int homeGoals, int awayGoals, boolean userMatch,
+                            List<GoalView> goals) { }
+    public record SnapRowView(String team, boolean you, int played, int won, int drawn, int lost,
+                              int gf, int ga, int gd, int points) { }
+    public record MatchdayView(int number, List<MatchView> matches, List<SnapRowView> table) { }
+    /** The whole season to play back, plus the final debrief shown at the end. */
+    public record SeasonReplayView(List<MatchdayView> matchdays, SeasonView debrief) { }
+
     public static SeasonView toView(SeasonSimulator.SeasonResult res) {
         Xi userXi = res.userStanding().team;
         var user = res.userStanding();
@@ -86,6 +96,21 @@ public final class SeasonViewMapper {
             res.topAssists().stream().map(s -> new StatRow(s.player.name(), s.team, s.assists)).limit(10).toList(),
             res.goldenGlove().stream().map(s -> new StatRow(s.player.name(), s.team, s.cleanSheets)).limit(10).toList(),
             potsView);
+    }
+
+    /** Build the playback payload — the matchday-by-matchday log + the final debrief. */
+    public static SeasonReplayView toReplay(SeasonSimulator.SeasonResult res) {
+        List<MatchdayView> mds = new ArrayList<>();
+        for (var md : res.matchdays()) {
+            List<MatchView> matches = md.matches().stream().map(m -> new MatchView(
+                stripFormation(m.home()), stripFormation(m.away()), m.homeGoals(), m.awayGoals(), m.userMatch(),
+                m.goals().stream().map(g -> new GoalView(g.scorer(), g.minute(), g.home())).toList())).toList();
+            List<SnapRowView> table = md.table().stream().map(s -> new SnapRowView(
+                stripFormation(s.team()), s.you(), s.played(), s.won(), s.drawn(), s.lost(),
+                s.gf(), s.ga(), s.gd(), s.points())).toList();
+            mds.add(new MatchdayView(md.number(), matches, table));
+        }
+        return new SeasonReplayView(mds, toView(res));
     }
 
     /** "Real Madrid CF 2018/19 (4-3-3)" -> "Real Madrid CF 2018/19" (the formation is its own field). */

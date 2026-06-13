@@ -106,8 +106,8 @@ public class DraftRunController {
     }
 
     @PostMapping("/{id}/simulate")
-    public SeasonViewMapper.SeasonView simulate(@PathVariable String id) {
-        return SeasonViewMapper.toView(service.simulate(id));
+    public SeasonViewMapper.SeasonReplayView simulate(@PathVariable String id) {
+        return SeasonViewMapper.toReplay(service.simulate(id));
     }
 
     // ---- rendering ----

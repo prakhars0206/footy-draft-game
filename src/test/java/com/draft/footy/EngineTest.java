@@ -124,6 +124,43 @@ class EngineTest {
     }
 
     @Test
+    void scheduleIsAValidDoubleRoundRobin() {
+        int n = 20;
+        var sched = SeasonSimulator.schedule(n);
+        assertEquals(2 * (n - 1), sched.size(), "38 matchdays for 20 teams");
+        int games = 0;
+        Set<String> orderedPairs = new HashSet<>();
+        for (var md : sched) {
+            assertEquals(n / 2, md.size(), "10 games per matchday");
+            boolean[] playing = new boolean[n];
+            for (int[] g : md) {
+                assertFalse(playing[g[0]] || playing[g[1]], "a team plays at most once per matchday");
+                playing[g[0]] = playing[g[1]] = true;
+                assertTrue(orderedPairs.add(g[0] + ">" + g[1]), "each ordered fixture appears exactly once");
+                games++;
+            }
+            for (boolean b : playing) assertTrue(b, "every team plays every matchday");
+        }
+        assertEquals(n * (n - 1), games, "380 games total");
+    }
+
+    @Test
+    void finalMatchdaySnapshotMatchesFinalTable() throws Exception {
+        var clubs = clubs(); var pool = pool(clubs);
+        Xi xi = buildXi(pool, 85);
+        Random rng = new Random(9L);
+        var res = new SeasonSimulator().simulate(xi, new OpponentPyramid(clubs).generate(rng), rng);
+        assertEquals(38, res.matchdays().size());
+        var lastSnap = res.matchdays().get(37).table();
+        assertEquals(res.table().size(), lastSnap.size());
+        for (int i = 0; i < lastSnap.size(); i++) {
+            assertEquals(res.table().get(i).team.name, lastSnap.get(i).team(), "snapshot order matches final table at " + i);
+            assertEquals(res.table().get(i).points(), lastSnap.get(i).points());
+        }
+        for (var row : lastSnap) assertEquals(38, row.played(), "every team played 38");
+    }
+
+    @Test
     void dixonColesTauBoostsLowDrawsAndLeavesOthersAlone() {
         // RHO < 0: the four low-score cells shift mass into the draws (0-0, 1-1); everything else is untouched.
         double l = 1.6, m = 1.3;

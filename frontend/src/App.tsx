@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { RunState, SeasonView } from './api'
+import type { RunState, SeasonReplay, SeasonView } from './api'
 import { SetupScreen } from './screens/SetupScreen'
 import { DraftScreen } from './screens/DraftScreen'
+import { PlaybackScreen } from './screens/PlaybackScreen'
 import { ResultsScreen } from './screens/ResultsScreen'
 
-type View = 'setup' | 'draft' | 'results'
+type View = 'setup' | 'draft' | 'playback' | 'results'
 
 export default function App() {
   const [view, setView] = useState<View>('setup')
   const [run, setRun] = useState<RunState | null>(null)
+  const [replay, setReplay] = useState<SeasonReplay | null>(null)
   const [season, setSeason] = useState<SeasonView | null>(null)
 
   return (
@@ -33,8 +35,19 @@ export default function App() {
               <DraftScreen
                 run={run}
                 onRun={setRun}
-                onSimulated={(s) => {
-                  setSeason(s)
+                onSimulated={(r) => {
+                  setReplay(r)
+                  setView('playback')
+                }}
+              />
+            </Fade>
+          )}
+          {view === 'playback' && replay && (
+            <Fade key="playback">
+              <PlaybackScreen
+                replay={replay}
+                onFinish={() => {
+                  setSeason(replay.debrief)
                   setView('results')
                 }}
               />
@@ -46,6 +59,7 @@ export default function App() {
                 season={season}
                 onNewRun={() => {
                   setRun(null)
+                  setReplay(null)
                   setSeason(null)
                   setView('setup')
                 }}

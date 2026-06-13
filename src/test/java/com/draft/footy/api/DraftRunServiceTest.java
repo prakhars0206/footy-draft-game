@@ -158,7 +158,7 @@ class DraftRunServiceTest {
     void seasonViewCarriesEveryTeamWithStatsAndProjectedPos() {
         var run = service.create(cmd(99L, ShowRatings.ON, PlayerRatings.CAREER));
         completeDraft(run.getId());
-        var view = controller.simulate(run.getId());
+        var view = controller.simulate(run.getId()).debrief();
         assertEquals(20, view.table().size());
         for (var row : view.table()) {
             assertEquals(11, row.players().size(), "each team carries its full XI");
@@ -174,7 +174,7 @@ class DraftRunServiceTest {
         var run = service.create(cmd(2025L, ShowRatings.ON, PlayerRatings.CAREER));
         completeDraft(run.getId());
         int presim = service.preview(run.getId()).projection().expectedPoints();
-        var view = controller.simulate(run.getId());
+        var view = controller.simulate(run.getId()).debrief();
         assertEquals(presim, view.projection().expectedPoints(), "debrief projection must match the pre-sim one");
         var you = view.table().stream().filter(SeasonViewMapper.TeamRow::you).findFirst().orElseThrow();
         assertEquals(presim, you.projectedPoints(), "your row's projected points must match the projection");

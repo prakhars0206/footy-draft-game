@@ -26,12 +26,20 @@ public final class SeasonSimulator {
         PlayerStat(Player p, String team) { this.player = p; this.team = team; }
     }
 
+    public record Goal(String scorer, int minute, boolean home) {}
+    public record MatchResult(String home, String away, int homeGoals, int awayGoals, boolean userMatch,
+                              List<Goal> goals) {}
+    public record SnapRow(String team, boolean you, int played, int won, int drawn, int lost,
+                          int gf, int ga, int gd, int points) {}
+    /** One matchday: its 10 fixtures + a snapshot of the league table after they're played. */
+    public record Matchday(int number, List<MatchResult> matches, List<SnapRow> table) {}
+
     public record SeasonResult(
         List<Standing> table, Standing userStanding, int userPosition,
         List<PlayerStat> topScorers, List<PlayerStat> topAssists, List<PlayerStat> goldenGlove,
         PlayerStat playerOfSeason,
         int biggestWinFor, int biggestWinAgainst, int longestWinStreak,
-        Map<Xi, List<PlayerStat>> teamStats) {}
+        Map<Xi, List<PlayerStat>> teamStats, List<Matchday> matchdays) {}
 
     public SeasonResult simulate(Xi userXi, List<Xi> opponents, Random rng) {
         List<Xi> teams = new ArrayList<>();
@@ -48,32 +56,42 @@ public final class SeasonSimulator {
             stats.put(t, m);
         }
 
-        // User-team match outcomes in order, for streak / biggest-win extraction.
+        // User-team match outcomes in matchday order, for streak / biggest-win extraction.
         List<int[]> userScores = new ArrayList<>(); // {for, against}
+        List<Matchday> matchdays = new ArrayList<>();
+        int mdNum = 0;
 
-        for (Xi home : teams) {
-            for (Xi away : teams) {
-                if (home == away) continue;
+        for (List<int[]> round : schedule(teams.size())) {
+            mdNum++;
+            List<MatchResult> results = new ArrayList<>();
+            for (int[] fixture : round) {
+                Xi home = teams.get(fixture[0]), away = teams.get(fixture[1]);
                 MatchEngine.Result r = engine.play(home, away, rng);
                 record(standings.get(home), r.homeGoals(), r.awayGoals());
                 record(standings.get(away), r.awayGoals(), r.homeGoals());
 
+                List<Goal> goals = new ArrayList<>();
                 for (MatchEngine.GoalEvent g : r.events()) {
                     Xi team = g.home() ? home : away;
                     stats.get(team).get(g.scorer().id()).goals++;
                     if (g.assist() != null) stats.get(team).get(g.assist().id()).assists++;
+                    goals.add(new Goal(g.scorer().name(), g.minute(), g.home()));
                 }
                 if (r.homeCleanSheet()) for (Player p : home.backline()) stats.get(home).get(p.id()).cleanSheets++;
                 if (r.awayCleanSheet()) for (Player p : away.backline()) stats.get(away).get(p.id()).cleanSheets++;
 
                 if (home == userXi) userScores.add(new int[]{r.homeGoals(), r.awayGoals()});
                 if (away == userXi) userScores.add(new int[]{r.awayGoals(), r.homeGoals()});
+
+                goals.sort(Comparator.comparingInt(Goal::minute));
+                results.add(new MatchResult(home.name, away.name, r.homeGoals(), r.awayGoals(),
+                    home == userXi || away == userXi, goals));
             }
+            matchdays.add(new Matchday(mdNum, results, snapshot(standings, userXi)));
         }
 
         List<Standing> table = new ArrayList<>(standings.values());
-        table.sort(Comparator.comparingInt(Standing::points)
-            .thenComparingInt(Standing::gd).thenComparingInt(s -> s.gf).reversed());
+        table.sort(tableOrder());
 
         Standing user = standings.get(userXi);
         int pos = table.indexOf(user) + 1;
@@ -88,7 +106,52 @@ public final class SeasonSimulator {
             topBy(stats, s -> s.cleanSheets, p -> p.player.primaryLine() == Line.GK),
             playerOfSeason(stats),
             biggest(userScores, true), biggest(userScores, false), longestStreak(userScores),
-            teamStats);
+            teamStats, matchdays);
+    }
+
+    private static Comparator<Standing> tableOrder() {
+        return Comparator.comparingInt(Standing::points)
+            .thenComparingInt(Standing::gd).thenComparingInt((Standing s) -> s.gf).reversed();
+    }
+
+    /** Snapshot the current table (sorted), flagging the user's row. */
+    private List<SnapRow> snapshot(Map<Xi, Standing> standings, Xi userXi) {
+        List<Standing> t = new ArrayList<>(standings.values());
+        t.sort(tableOrder());
+        List<SnapRow> rows = new ArrayList<>();
+        for (Standing s : t)
+            rows.add(new SnapRow(s.team.name, s.team == userXi, s.played, s.won, s.drawn, s.lost,
+                s.gf, s.ga, s.gd(), s.points()));
+        return rows;
+    }
+
+    /**
+     * Round-robin fixture calendar (circle method) for an even team count: 2·(n-1) matchdays of n/2 games.
+     * Single round-robin (each pair once), then mirrored with home/away swapped — same 380 fixtures as the old
+     * nested loop, grouped into matchdays. Deterministic (no RNG); home/away alternates for spacing.
+     */
+    static List<List<int[]>> schedule(int n) {
+        int[] arr = new int[n];
+        for (int i = 0; i < n; i++) arr[i] = i;
+        List<List<int[]>> first = new ArrayList<>();
+        for (int r = 0; r < n - 1; r++) {
+            List<int[]> md = new ArrayList<>();
+            for (int i = 0; i < n / 2; i++) {
+                int a = arr[i], b = arr[n - 1 - i];
+                md.add((r + i) % 2 == 0 ? new int[]{a, b} : new int[]{b, a});
+            }
+            first.add(md);
+            int last = arr[n - 1];            // rotate, keeping arr[0] fixed
+            for (int i = n - 1; i > 1; i--) arr[i] = arr[i - 1];
+            arr[1] = last;
+        }
+        List<List<int[]>> rounds = new ArrayList<>(first);
+        for (List<int[]> md : first) {         // second leg: swap home/away
+            List<int[]> mirror = new ArrayList<>();
+            for (int[] m : md) mirror.add(new int[]{m[1], m[0]});
+            rounds.add(mirror);
+        }
+        return rounds;
     }
 
     private void record(Standing s, int gf, int ga) {

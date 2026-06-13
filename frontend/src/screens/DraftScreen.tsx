@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import type {
-  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonView, Slot, SpinView, SquadPlayer, Strength,
+  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonReplay, Slot, SpinView, SquadPlayer, Strength,
 } from '../api'
 import { lineClasses, lineOf } from '../theme'
 import { PitchView } from '../components/PitchView'
@@ -27,7 +27,7 @@ export function DraftScreen({
 }: {
   run: RunState
   onRun: (r: RunState) => void
-  onSimulated: (s: SeasonView) => void
+  onSimulated: (r: SeasonReplay) => void
 }) {
   const [spin, setSpin] = useState<SpinView | null>(null)
   const [selected, setSelected] = useState<SquadPlayer | null>(null)
