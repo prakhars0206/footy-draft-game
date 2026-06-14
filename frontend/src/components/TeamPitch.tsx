@@ -27,17 +27,17 @@ export function TeamPitch({
         return (
           <div
             key={i}
-            className="absolute flex w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+            className="absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center"
             style={{ left: `${c.x}%`, top: `${c.y}%` }}
             title={`${p.name} · ${p.position} · ${p.overall}`}
           >
-            <span className={`flex h-8 w-8 items-center justify-center border ${lc.border} ${lc.glow} bg-terminal/85 text-[11px] font-bold tabular-nums ${lc.text}`}>
+            <span className={`flex h-9 w-9 items-center justify-center border ${lc.border} ${lc.glow} bg-terminal/85 text-[12px] font-bold tabular-nums ${lc.text}`}>
               {p.overall}
             </span>
-            <span className="mt-0.5 max-w-16 truncate text-[8px] leading-tight text-ink/85">{p.name}</span>
-            <span className={`text-[8px] font-bold leading-tight ${lc.text}`}>{p.position}</span>
+            <span className="mt-0.5 max-w-20 truncate text-[9px] leading-tight text-ink/85">{p.name}</span>
+            <span className={`text-[9px] font-bold leading-tight ${lc.text}`}>{p.position}</span>
             {showStats && (
-              <span className="text-[8px] leading-tight text-amber">
+              <span className="text-[9px] leading-tight text-amber">
                 {p.goals ?? 0}G·{p.assists ?? 0}A{showCS ? `·${p.cleanSheets ?? 0}CS` : ''}
               </span>
             )}

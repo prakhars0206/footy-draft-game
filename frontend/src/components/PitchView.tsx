@@ -51,20 +51,20 @@ export function PitchView({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 20 }}
                 onClick={clickable ? () => onSlotClick?.(slot) : undefined}
-                className={`flex w-14 flex-col items-center ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
+                className={`flex w-16 flex-col items-center ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <span
-                  className={`flex h-8 w-8 items-center justify-center border ${lc.border} ${lc.glow} bg-terminal/85 text-[10px] font-bold ${lc.text} ${isSelected ? 'ring-2 ring-amber' : ''}`}
+                  className={`flex h-9 w-9 items-center justify-center border ${lc.border} ${lc.glow} bg-terminal/85 text-[11px] font-bold ${lc.text} ${isSelected ? 'ring-2 ring-amber' : ''}`}
                 >
                   {code(slot.name ?? '')}
                 </span>
-                <span className="mt-0.5 max-w-14 truncate text-[8px] leading-tight text-ink/80">{slot.name}</span>
-                <span className={`text-[8px] font-bold leading-tight ${lc.text}`}>{renderRating(slot.rating).text}</span>
+                <span className="mt-0.5 max-w-16 truncate text-[9px] leading-tight text-ink/80">{slot.name}</span>
+                <span className={`text-[9px] font-bold leading-tight ${lc.text}`}>{renderRating(slot.rating).text}</span>
               </motion.button>
             ) : (
               <button
                 onClick={isInteractive ? () => onSlotClick?.(slot) : undefined}
-                className={`flex h-8 w-8 items-center justify-center border border-dashed text-[9px] font-bold tracking-wider ${
+                className={`flex h-9 w-9 items-center justify-center border border-dashed text-[10px] font-bold tracking-wider ${
                   isInteractive
                     ? `${lc.border} ${lc.text} ${lc.glow} animate-pulse cursor-pointer`
                     : 'border-edge-bright text-ink/40'
