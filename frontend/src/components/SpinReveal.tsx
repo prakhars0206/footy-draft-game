@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import type { SpinView } from '../api'
+import type { SpinView, SpinClub } from '../api'
 import { Panel, Stamp } from './primitives'
 
 // Fake names that flicker past during the "locking on" scan — the suspense before you see what you landed on.
@@ -21,7 +21,7 @@ const TIER_STYLE: Record<string, Style> = {
   'RELEGATION SCRAPPER': { text: 'text-danger',     border: 'border-danger',      banner: 'Relegation Scrapper', tone: 'danger',   epic: false, rgb: '178,74,64',   scanMs: 1400, tagline: 'a proper scrap on your hands' },
 }
 
-export function SpinReveal({ spin, onAccess }: { spin: SpinView; onAccess: () => void }) {
+export function SpinReveal({ spin, onPick }: { spin: SpinView; onPick: (club: SpinClub) => void }) {
   const [phase, setPhase] = useState<'scan' | 'reveal'>('scan')
   const [flick, setFlick] = useState(FLICKER[0])
   const st = TIER_STYLE[spin.tier] ?? TIER_STYLE['MID-TABLE']
@@ -85,38 +85,43 @@ export function SpinReveal({ spin, onAccess }: { spin: SpinView; onAccess: () =>
           )}
 
           <motion.div
-            initial={{ scale: st.epic ? 0.35 : 0.85, opacity: 0 }}
+            initial={{ scale: st.epic ? 0.4 : 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: st.epic ? 300 : 220, damping: st.epic ? 12 : 16 }}
-            className="relative z-10 flex flex-col items-center"
+            className="relative z-10 flex w-full max-w-md flex-col items-center"
           >
-            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Stamp text={st.banner} tone={st.tone} className="mb-3" />
-            </motion.div>
             <motion.div
-              className={`font-display text-4xl font-black leading-none ${st.text}`}
-              style={st.epic ? { textShadow: `0 0 26px rgba(${st.rgb},0.45)` } : undefined}
-              animate={st.epic ? { scale: [1, 1.035, 1] } : {}}
-              transition={{ repeat: Infinity, duration: 1.9 }}
+              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className={`font-display text-3xl font-black leading-none ${st.text}`}
+              style={st.epic ? { textShadow: `0 0 24px rgba(${st.rgb},0.45)` } : undefined}
             >
-              {spin.club}
+              <Stamp text={st.banner} tone={st.tone} className="text-sm" />
             </motion.div>
-            <div className="mt-2 font-display text-sm italic text-ink/60">{spin.season}{spin.league ? ` · ${spin.league}` : ''}</div>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="mt-4 flex items-baseline gap-2">
-              <span className="eyebrow text-ink/50">Squad Rating</span>
-              <span className={`font-display text-3xl font-semibold tabular-nums ${st.text}`}>{spin.strength}</span>
-            </motion.div>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
-              className={`mt-2 font-display text-[13px] italic ${st.epic ? st.text : 'text-ink/45'}`}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}
+              className={`mt-3 font-display text-[13px] italic ${st.epic ? st.text : 'text-ink/55'}`}>
               {st.tagline}
             </motion.div>
-            <motion.button
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-              onClick={onAccess}
-              className={`mt-6 border ${st.border} ${st.text} px-6 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] transition hover:bg-panel-2`}
-            >
-              Access Squad →
-            </motion.button>
+
+            <div className="eyebrow mt-5 text-ink/45">Choose your club</div>
+            <div className="mt-2 w-full space-y-2">
+              {spin.clubs.map((c, i) => (
+                <motion.button
+                  key={c.club + c.season}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.09 }}
+                  onClick={() => onPick(c)}
+                  className={`flex w-full items-center justify-between gap-3 border ${st.border} px-4 py-3 text-left transition hover:bg-panel-2`}
+                >
+                  <div className="min-w-0">
+                    <div className={`truncate font-display text-xl font-semibold ${st.text}`}>{c.club}</div>
+                    <div className="truncate text-[11px] text-ink/50">{c.season}{c.league ? ` · ${c.league}` : ''}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className={`font-display text-2xl font-bold leading-none tabular-nums ${st.text}`}>{c.strength}</div>
+                    <div className="eyebrow text-ink/35">squad</div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
           </motion.div>
         </>
       )}

@@ -38,9 +38,7 @@ export interface Strength {
 }
 
 export interface SpinInfo {
-  club: string
-  season: string
-  league: string | null
+  tier: string
 }
 
 export interface Odds {
@@ -131,14 +129,17 @@ export interface SquadPlayer {
   eligibleSlots: string[]
 }
 
-export interface SpinView {
+export interface SpinClub {
   club: string
   season: string
   league: string | null
   strength: number
+  squad: SquadPlayer[]
+}
+export interface SpinView {
   tier: string
   rerollsRemaining: number
-  squad: SquadPlayer[]
+  clubs: SpinClub[]
 }
 
 export interface StatRow {

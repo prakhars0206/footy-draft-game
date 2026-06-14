@@ -36,9 +36,22 @@ public class DraftRunEntity {
     private int spinCount;                        // drives deterministic spins (seed + spinCount)
     @Enumerated(EnumType.STRING) private RunStatus status = RunStatus.DRAFTING;
 
-    // current spin awaiting a pick (Squad First): the landed club-season (nullable when none up)
-    private String spinClub;
-    private String spinSeason;
+    // current spin awaiting a pick (Squad First): the landed tier + the 2–3 clubs offered (empty when none up)
+    private String spinTier;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "draft_run_spin_offer", joinColumns = @JoinColumn(name = "run_id"))
+    private List<SpinOffer> spinOffers = new ArrayList<>();
+
+    /** One club-season offered by the current spin (the user picks one to draft from). */
+    @Embeddable
+    public static class SpinOffer {
+        private String club;
+        private String season;
+        protected SpinOffer() { }
+        public SpinOffer(String club, String season) { this.club = club; this.season = season; }
+        public String getClub() { return club; }
+        public String getSeason() { return season; }
+    }
 
     @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("slotIndex ASC")
@@ -60,9 +73,13 @@ public class DraftRunEntity {
 
     public void addSlot(DraftSlotEntity s) { slots.add(s); s.setRun(this); }
 
-    public boolean hasSpin() { return spinClub != null; }
-    public void setSpin(String club, String season) { this.spinClub = club; this.spinSeason = season; }
-    public void clearSpin() { this.spinClub = null; this.spinSeason = null; }
+    public boolean hasSpin() { return spinOffers != null && !spinOffers.isEmpty(); }
+    public void setSpin(String tier, List<ClubSeason> clubs) {
+        this.spinTier = tier;
+        this.spinOffers = new ArrayList<>();
+        for (ClubSeason cs : clubs) this.spinOffers.add(new SpinOffer(cs.club, cs.season));
+    }
+    public void clearSpin() { this.spinTier = null; this.spinOffers.clear(); }
 
     public List<DraftSlotEntity> openSlots() {
         return slots.stream().filter(s -> !s.isFilled()).toList();
@@ -89,7 +106,7 @@ public class DraftRunEntity {
     public void setRerollsRemaining(int n) { this.rerollsRemaining = n; }
     public RunStatus getStatus() { return status; }
     public void setStatus(RunStatus status) { this.status = status; }
-    public String getSpinClub() { return spinClub; }
-    public String getSpinSeason() { return spinSeason; }
+    public String getSpinTier() { return spinTier; }
+    public List<SpinOffer> getSpinOffers() { return spinOffers; }
     public List<DraftSlotEntity> getSlots() { return slots; }
 }

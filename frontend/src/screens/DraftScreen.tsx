@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import type {
-  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonReplay, Slot, SpinView, SquadPlayer, Strength,
+  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonReplay, Slot, SpinClub, SpinView, SquadPlayer, Strength,
 } from '../api'
 import { lineClasses, lineOf } from '../theme'
 import { PitchView } from '../components/PitchView'
@@ -37,6 +37,7 @@ export function DraftScreen({
   onSimulated: (r: SeasonReplay) => void
 }) {
   const [spin, setSpin] = useState<SpinView | null>(null)
+  const [chosenClub, setChosenClub] = useState<SpinClub | null>(null)
   const [selected, setSelected] = useState<SquadPlayer | null>(null)
   const [moveFrom, setMoveFrom] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -74,7 +75,7 @@ export function DraftScreen({
       setScanning(true)
       try {
         const s = await api.spin(run.runId)
-        setSpin(s); setSelected(null); setMoveFrom(null); setRevealing(true)
+        setSpin(s); setChosenClub(null); setSelected(null); setMoveFrom(null); setRevealing(true)
         onRun({ ...run, rerollsRemaining: s.rerollsRemaining })
       } finally { setScanning(false) }
     })
@@ -82,7 +83,7 @@ export function DraftScreen({
   const doDraft = (slotPosition: string, sofifaId: number) =>
     guard(async () => {
       const res = await api.draft(run.runId, slotPosition, sofifaId)
-      onRun(res.state); setSpin(null); setSelected(null); setRevealing(false)
+      onRun(res.state); setSpin(null); setChosenClub(null); setSelected(null); setRevealing(false)
       // The "who you passed on" reveal only adds value when ratings were hidden — skip it in full-ratings mode.
       if (run.showRatings !== 'ON') setDeclassified({ club: res.club, season: res.season, players: res.declassified })
     })
@@ -129,7 +130,7 @@ export function DraftScreen({
             <LeaguePanel preview={preview} busy={busy} onInspect={setInspect} onRun={() => guard(async () => onSimulated(await api.simulate(run.runId)))} />
           ) : !spin ? (
             <Panel label="The Spin" className="flex flex-1 flex-col items-center justify-center gap-5 p-8">
-              <Prompt>spin to draw a club, then draft from its squad</Prompt>
+              <Prompt>spin for a tier, then choose your club</Prompt>
               <motion.button
                 whileHover={{ scale: busy ? 1 : 1.03 }} whileTap={{ scale: busy ? 1 : 0.97 }}
                 disabled={busy} onClick={doSpin}
@@ -139,12 +140,14 @@ export function DraftScreen({
                 <span className="absolute inset-2.5 rounded-full border border-amber/20" />
               </motion.button>
             </Panel>
-          ) : revealing ? (
-            <SpinReveal spin={spin} onAccess={() => setRevealing(false)} />
+          ) : revealing || !chosenClub ? (
+            <SpinReveal spin={spin} onPick={(c) => { setChosenClub(c); setSelected(null); setRevealing(false) }} />
           ) : (
             <SquadPanel
-              spin={spin} selected={selected} busy={busy} canReroll={run.rerollsRemaining > 0}
+              club={chosenClub} tier={spin.tier} multiClub={spin.clubs.length > 1}
+              selected={selected} busy={busy} canReroll={run.rerollsRemaining > 0}
               onSelect={(p) => { setSelected(p); setMoveFrom(null) }}
+              onBack={() => { setSelected(null); setRevealing(true) }}
               onReroll={doSpin} onDraft={(p, pos) => doDraft(pos, p.sofifaId)}
             />
           )}
@@ -296,22 +299,25 @@ function OddsRow({ label, v }: { label: string; v: number }) {
 }
 
 function SquadPanel({
-  spin, selected, busy, canReroll, onSelect, onReroll, onDraft,
+  club, tier, multiClub, selected, busy, canReroll, onSelect, onBack, onReroll, onDraft,
 }: {
-  spin: SpinView; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
-  onSelect: (p: SquadPlayer) => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
+  club: SpinClub; tier: string; multiClub: boolean; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
+  onSelect: (p: SquadPlayer) => void; onBack: () => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
 }) {
   return (
-    <Panel label="The Spun Squad" className="flex min-h-0 flex-1 flex-col p-4">
+    <Panel label={`Draft from · ${tier.toLowerCase()}`} className="flex min-h-0 flex-1 flex-col p-4">
       <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate font-display text-lg font-semibold text-ink-bright">{spin.club}</div>
-          <div className="text-[11px] text-ink/50">{spin.season}{spin.league ? ` · ${spin.league}` : ''}</div>
+          <div className="truncate font-display text-lg font-semibold text-ink-bright">{club.club}</div>
+          <div className="text-[11px] text-ink/50">{club.season}{club.league ? ` · ${club.league}` : ''}</div>
         </div>
-        <button disabled={busy || !canReroll} onClick={onReroll} className="shrink-0 border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {multiClub && <button disabled={busy} onClick={onBack} className="border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">◂ Clubs</button>}
+          <button disabled={busy || !canReroll} onClick={onReroll} className="border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
+        </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
-        {spin.squad.map((p, i) => {
+        {club.squad.map((p, i) => {
           const eligible = p.eligibleSlots.length > 0
           const isSel = selected?.sofifaId === p.sofifaId
           return (

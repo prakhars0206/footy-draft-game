@@ -46,11 +46,12 @@ public class DraftRunController {
                                String draftMode, String playerRatings, String leagueScope, String status,
                                long seed, int rerollsRemaining, int slotsRemaining,
                                StrengthView strength, List<SlotView> slots, SpinInfo currentSpin) { }
-    public record SpinInfo(String club, String season, String league) { }
+    public record SpinInfo(String tier) { }
     public record SquadPlayerView(int sofifaId, String name, String nation, List<String> positions,
                                   RatingView rating, List<String> eligibleSlots) { }
-    public record SpinView(String club, String season, String league, int strength, String tier,
-                           int rerollsRemaining, List<SquadPlayerView> squad) { }
+    /** One club offered by a spin (all share the spin's tier); pick one to draft from. */
+    public record SpinClubView(String club, String season, String league, int strength, List<SquadPlayerView> squad) { }
+    public record SpinView(String tier, int rerollsRemaining, List<SpinClubView> clubs) { }
     /** A drafted-from squad revealed after a pick (true ratings) — learn who you passed on. `eligible` = still fits an open slot. */
     public record DeclassifiedPlayer(int sofifaId, String name, String position, String line, int overall,
                                      boolean draftedByYou, boolean eligible) { }
@@ -87,7 +88,7 @@ public class DraftRunController {
     @PostMapping("/{id}/spin")
     public SpinView spin(@PathVariable String id) {
         var result = service.spin(id);
-        return toSpin(result.run(), result.squad());
+        return toSpin(result.run(), result.tier(), result.clubs());
     }
 
     @PostMapping("/{id}/draft")
@@ -141,7 +142,7 @@ public class DraftRunController {
                 slots.add(new SlotView(s.getSlotIndex(), s.getPosition(), line, false,
                     null, null, null, null, null, null));
         }
-        SpinInfo spin = run.hasSpin() ? new SpinInfo(run.getSpinClub(), run.getSpinSeason(), null) : null;
+        SpinInfo spin = run.hasSpin() ? new SpinInfo(run.getSpinTier()) : null;
         return new RunStateView(run.getId(), run.getFormation(), run.getDifficulty().name(),
             run.getShowRatings().name(), run.getDraftMode().name(), run.getPlayerRatings().name(),
             run.getLeagueScope().name(), run.getStatus().name(), run.getSeed(),
@@ -187,25 +188,26 @@ public class DraftRunController {
         return "RELEGATION SCRAPPER";
     }
 
-    private SpinView toSpin(DraftRunEntity run, ClubSeason squad) {
+    private SpinView toSpin(DraftRunEntity run, String tier, List<ClubSeason> clubs) {
         List<String> openPositions = run.openSlots().stream()
             .map(DraftSlotEntity::getPosition).distinct().toList();
-        List<SquadPlayerView> rows = new ArrayList<>();
-        for (Player base : squad.roster) {
-            Player active = service.active(run, base); // Prime snapshot in Prime mode (rating + positions)
-            List<String> eligible = openPositions.stream().filter(active::canPlay).toList();
-            rows.add(new SquadPlayerView(active.id(), active.name(), active.nation(), active.positions(),
-                rating(run, active.id(), active.overall()), eligible));
-        }
-        // Eligible (can fill an open slot) first; within each group, OFF/blind mode shuffles deterministically so
-        // the row order never leaks who's strongest — otherwise sort strongest-first (band high in Scout).
         boolean blind = run.getShowRatings() == ShowRatings.OFF;
-        rows.sort(Comparator
-            .comparing((SquadPlayerView v) -> v.eligibleSlots().isEmpty())
-            .thenComparingInt(v -> blind ? shuffleKey(run.getSeed(), v.sofifaId()) : -scoutOrExact(v)));
-        int strength = squad.optimalStrength();
-        return new SpinView(squad.club, squad.season, squad.league, strength, tierLabel(strength),
-            run.getRerollsRemaining(), rows);
+        List<SpinClubView> clubViews = clubs.stream().map(squad -> {
+            List<SquadPlayerView> rows = new ArrayList<>();
+            for (Player base : squad.roster) {
+                Player active = service.active(run, base); // Prime snapshot in Prime mode (rating + positions)
+                List<String> eligible = openPositions.stream().filter(active::canPlay).toList();
+                rows.add(new SquadPlayerView(active.id(), active.name(), active.nation(), active.positions(),
+                    rating(run, active.id(), active.overall()), eligible));
+            }
+            // Eligible (can fill an open slot) first; within each group, OFF/blind mode shuffles deterministically
+            // so the row order never leaks who's strongest — otherwise sort strongest-first (band high in Scout).
+            rows.sort(Comparator
+                .comparing((SquadPlayerView v) -> v.eligibleSlots().isEmpty())
+                .thenComparingInt(v -> blind ? shuffleKey(run.getSeed(), v.sofifaId()) : -scoutOrExact(v)));
+            return new SpinClubView(squad.club, squad.season, squad.league, squad.optimalStrength(), rows);
+        }).toList();
+        return new SpinView(tier, run.getRerollsRemaining(), clubViews);
     }
 
     /** Renders a rating per the run's Show-Ratings mode — the true overall is omitted in SCOUT and OFF. */

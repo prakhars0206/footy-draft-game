@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,8 +37,8 @@ public class DraftRunService {
                                    DraftMode draftMode, PlayerRatings playerRatings, LeagueScope leagueScope,
                                    String classicLeague, Integer eraFrom, Integer eraTo) { }
 
-    /** A spin's result: the updated run plus the landed club-season's full roster (for rendering the squad). */
-    public record SpinResult(DraftRunEntity run, ClubSeason squad) { }
+    /** A spin's result: the landed TIER plus the 2–3 clubs of that tier offered for the user to choose from. */
+    public record SpinResult(DraftRunEntity run, String tier, List<ClubSeason> clubs) { }
 
     /** A draft's result: the updated run plus the squad it was drafted from (declassified after the pick). */
     public record DraftResult(DraftRunEntity run, ClubSeason squad, int draftedId) { }
@@ -77,14 +80,14 @@ public class DraftRunService {
             run.getLeagueScope(), run.getClassicLeague(), run.getEraFrom(), run.getEraTo());
         if (eligible.isEmpty()) throw bad("no club-seasons match this run's league/era filter");
 
-        if (run.hasSpin()) { // a squad is already on screen -> this is a reroll
+        if (run.hasSpin()) { // a board is already on screen -> this is a reroll
             if (run.getRerollsRemaining() <= 0) throw bad("no rerolls left");
             run.setRerollsRemaining(run.getRerollsRemaining() - 1);
         }
 
-        ClubSeason squad = spinUsable(run, eligible);
-        run.setSpin(squad.club, squad.season);
-        return new SpinResult(run, squad);
+        Spin spin = spinChoices(run, eligible);
+        run.setSpin(spin.tier(), spin.clubs());
+        return new SpinResult(run, spin.tier(), spin.clubs());
     }
 
     /** Place a player from the current spin into an open slot of {@code slotPosition} (natural positions only). */
@@ -93,9 +96,11 @@ public class DraftRunService {
         requireDrafting(run);
         if (!run.hasSpin()) throw bad("spin a squad before drafting");
 
-        ClubSeason squad = currentSquad(run);
-        Player picked = squad.roster.stream().filter(p -> p.id() == sofifaId).findFirst()
+        List<ClubSeason> offers = currentOffers(run);
+        ClubSeason squad = offers.stream()
+            .filter(cs -> cs.roster.stream().anyMatch(p -> p.id() == sofifaId)).findFirst()
             .orElseThrow(() -> bad("player " + sofifaId + " is not in the current spin"));
+        Player picked = squad.roster.stream().filter(p -> p.id() == sofifaId).findFirst().orElseThrow();
         Player active = active(run, picked); // Prime = the peak-year snapshot (its rating AND positions)
 
         if (!active.canPlay(slotPosition))
@@ -162,16 +167,46 @@ public class DraftRunService {
 
     // --- helpers ---
 
-    /** Spin deterministically; skip (free) any squad that can't fill a single open slot — the §5B dead-end safeguard. */
-    private ClubSeason spinUsable(DraftRunEntity run, List<ClubSeason> eligible) {
+    private static final int CHOICES = 3;                 // clubs offered per spin
+    private record Spin(String tier, List<ClubSeason> clubs) { }
+
+    /**
+     * Spin in two stages: weighted-pick a TIER (the difficulty knob, {@link DraftTiers}), then offer up to 3
+     * DISTINCT clubs of that tier to choose from — excluding clubs already drafted from this run (so a single
+     * playthrough never repeats a club) and any squad that can't fill an open slot (§5B). Deterministic per spin.
+     */
+    private Spin spinChoices(DraftRunEntity run, List<ClubSeason> eligible) {
         List<String> open = run.openSlots().stream().map(DraftSlotEntity::getPosition).toList();
-        ClubSeason last = null;
-        for (int attempt = 0; attempt < 50; attempt++) {
-            Random rng = new Random(run.getSeed() * 1000003L + run.nextSpinIndex());
-            last = eligible.get(rng.nextInt(eligible.size()));
-            if (coversAnyOpenSlot(run, last, open)) return last;
+        Set<String> draftedFrom = run.getSlots().stream().filter(DraftSlotEntity::isFilled)
+            .map(s -> norm(s.getSourceClub())).collect(java.util.stream.Collectors.toSet());
+        Random rng = new Random(run.getSeed() * 1000003L + run.nextSpinIndex());
+
+        List<DraftTiers.Tier> remaining = new ArrayList<>(DraftTiers.TIERS);
+        while (!remaining.isEmpty()) {
+            DraftTiers.Tier tier = DraftTiers.weightedPick(remaining, rng);
+            List<ClubSeason> pool = new ArrayList<>(eligible.stream()
+                .filter(cs -> { int s = cs.optimalStrength(); return s >= tier.min() && s <= tier.max(); }).toList());
+            java.util.Collections.shuffle(pool, rng);
+            List<ClubSeason> chosen = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (ClubSeason cs : pool) {
+                String nc = norm(cs.club);
+                if (draftedFrom.contains(nc) || !seen.add(nc)) continue;   // distinct, not already drafted from
+                if (!coversAnyOpenSlot(run, cs, open)) continue;
+                chosen.add(cs);
+                if (chosen.size() == CHOICES) break;
+            }
+            if (!chosen.isEmpty()) return new Spin(tier.label(), chosen);
+            remaining.remove(tier);                                        // tier exhausted — re-pick another
         }
-        return last; // give up gracefully (shouldn't happen — real squads cover all lines)
+        // Ultra-fallback (shouldn't happen): any usable club anywhere.
+        for (ClubSeason cs : eligible)
+            if (coversAnyOpenSlot(run, cs, open)) return new Spin(DraftTiers.label(cs.optimalStrength()), List.of(cs));
+        return new Spin(DraftTiers.label(eligible.get(0).optimalStrength()), List.of(eligible.get(0)));
+    }
+
+    private static String norm(String club) {
+        return club == null ? "" : club.toLowerCase().replaceAll("[^a-z0-9]", "");
     }
 
     private boolean coversAnyOpenSlot(DraftRunEntity run, ClubSeason cs, List<String> openPositions) {
@@ -194,10 +229,15 @@ public class DraftRunService {
         return run.getPlayerRatings() == PlayerRatings.PRIME ? catalog.primeIndex().prime(p) : p;
     }
 
-    private ClubSeason currentSquad(DraftRunEntity run) {
-        return catalog.clubs().stream()
-            .filter(cs -> cs.club.equals(run.getSpinClub()) && cs.season.equals(run.getSpinSeason()))
-            .findFirst().orElseThrow(() -> bad("current spin is no longer available"));
+    /** Reconstruct the clubs offered by the current spin (from the persisted offers). */
+    private List<ClubSeason> currentOffers(DraftRunEntity run) {
+        List<ClubSeason> out = new ArrayList<>();
+        for (var off : run.getSpinOffers())
+            catalog.clubs().stream()
+                .filter(cs -> cs.club.equals(off.getClub()) && cs.season.equals(off.getSeason()))
+                .findFirst().ifPresent(out::add);
+        if (out.isEmpty()) throw bad("current spin is no longer available");
+        return out;
     }
 
     private DraftSlotEntity slot(DraftRunEntity run, int index) {

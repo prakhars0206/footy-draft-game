@@ -47,13 +47,14 @@ class DraftRunServiceTest {
         List<String> open = openPositions(run);
         Set<Integer> taken = run.getSlots().stream().filter(DraftSlotEntity::isFilled)
             .map(DraftSlotEntity::getSofifaId).collect(Collectors.toSet());
-        for (Player base : spin.squad().roster) {
-            if (taken.contains(base.id())) continue;
-            Player active = service.active(run, base);
-            for (String pos : open) {
-                if (active.canPlay(pos)) { service.draft(runId, pos, base.id()); return base.id(); }
+        for (ClubSeason club : spin.clubs())
+            for (Player base : club.roster) {
+                if (taken.contains(base.id())) continue;
+                Player active = service.active(run, base);
+                for (String pos : open) {
+                    if (active.canPlay(pos)) { service.draft(runId, pos, base.id()); return base.id(); }
+                }
             }
-        }
         throw new IllegalStateException("no draftable player in spun squad (safeguard should prevent this)");
     }
 
@@ -78,7 +79,7 @@ class DraftRunServiceTest {
     void naturalPositionOnly() {
         var run = service.create(cmd(7L, ShowRatings.ON, PlayerRatings.CAREER));
         var spin = service.spin(run.getId());
-        Player outfielder = spin.squad().roster.stream().filter(p -> !p.canPlay("GK")).findFirst().orElseThrow();
+        Player outfielder = spin.clubs().get(0).roster.stream().filter(p -> !p.canPlay("GK")).findFirst().orElseThrow();
         assertThrows(ResponseStatusException.class,
             () -> service.draft(run.getId(), "GK", outfielder.id()),
             "an outfielder must not be draftable into GK");
@@ -99,17 +100,18 @@ class DraftRunServiceTest {
         var run = service.create(cmd(3L, ShowRatings.ON, PlayerRatings.PRIME));
         var spin = service.spin(run.getId());
         List<String> open = openPositions(run);
-        for (Player base : spin.squad().roster) {
-            Player active = service.active(run, base);
-            String pos = open.stream().filter(active::canPlay).findFirst().orElse(null);
-            if (pos == null) continue;
-            service.draft(run.getId(), pos, base.id());
-            var filled = service.get(run.getId()).getSlots().stream()
-                .filter(s -> s.isFilled() && s.getSofifaId() == base.id()).findFirst().orElseThrow();
-            assertEquals(catalog.primeIndex().prime(base).overall(), filled.getOverall(),
-                "Prime mode stores the career-best overall");
-            return;
-        }
+        for (ClubSeason club : spin.clubs())
+            for (Player base : club.roster) {
+                Player active = service.active(run, base);
+                String pos = open.stream().filter(active::canPlay).findFirst().orElse(null);
+                if (pos == null) continue;
+                service.draft(run.getId(), pos, base.id());
+                var filled = service.get(run.getId()).getSlots().stream()
+                    .filter(s -> s.isFilled() && s.getSofifaId() == base.id()).findFirst().orElseThrow();
+                assertEquals(catalog.primeIndex().prime(base).overall(), filled.getOverall(),
+                    "Prime mode stores the career-best overall");
+                return;
+            }
         fail("no eligible squad player to draft");
     }
 
@@ -142,15 +144,16 @@ class DraftRunServiceTest {
         var run = service.create(cmd(7L, ShowRatings.SCOUT, PlayerRatings.CAREER));
         var spin = service.spin(run.getId());
         List<String> open = openPositions(run);
-        for (Player base : spin.squad().roster) {
-            Player active = service.active(run, base);
-            String pos = open.stream().filter(active::canPlay).findFirst().orElse(null);
-            if (pos == null) continue;
-            var res = service.draft(run.getId(), pos, base.id());
-            assertEquals(base.id(), res.draftedId());
-            assertEquals(spin.squad().roster.size(), res.squad().roster.size(), "the whole squad is declassified");
-            return;
-        }
+        for (ClubSeason club : spin.clubs())
+            for (Player base : club.roster) {
+                Player active = service.active(run, base);
+                String pos = open.stream().filter(active::canPlay).findFirst().orElse(null);
+                if (pos == null) continue;
+                var res = service.draft(run.getId(), pos, base.id());
+                assertEquals(base.id(), res.draftedId());
+                assertEquals(club.roster.size(), res.squad().roster.size(), "the whole drafted-from squad is declassified");
+                return;
+            }
         fail("no eligible squad player to draft");
     }
 
@@ -186,12 +189,15 @@ class DraftRunServiceTest {
             "4-3-3", Difficulty.NORMAL, ShowRatings.SCOUT, DraftMode.SQUAD_FIRST, PlayerRatings.CAREER,
             LeagueScope.WORLD, null, null, null, 11L));
         var spin = controller.spin(state.runId());
-        assertFalse(spin.squad().isEmpty());
-        for (var pv : spin.squad()) {
-            assertNull(pv.rating().overall(), "SCOUT payload must omit the true overall");
-            assertNotNull(pv.rating().low());
-            assertNotNull(pv.rating().high());
-            assertTrue(pv.rating().low() <= pv.rating().high());
+        assertFalse(spin.clubs().isEmpty());
+        for (var club : spin.clubs()) {
+            assertFalse(club.squad().isEmpty());
+            for (var pv : club.squad()) {
+                assertNull(pv.rating().overall(), "SCOUT payload must omit the true overall");
+                assertNotNull(pv.rating().low());
+                assertNotNull(pv.rating().high());
+                assertTrue(pv.rating().low() <= pv.rating().high());
+            }
         }
         // Strength is shown in every mode now (drafted players are revealed), but empty before any pick.
         assertNull(state.strength().overall(), "no team strength before drafting anyone");
