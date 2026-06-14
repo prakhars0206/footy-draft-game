@@ -104,7 +104,9 @@ Targets (tuned to real top-5-league distributions): monotonic (stronger → more
     - ✅ **Matchday playback** (`PlaybackScreen`) — watch the season unfold: animated live table, matchday results with scorers, play/pause + speed + step + skip + keyboard.
     - ⏳ **Next:** re-fit the projection once constants settle; pre-sim projected points on the league screen; Scout-precision setting; richer setup (era slider, league picker); Continue-Draft resume; possible UI overhaul.
     - ⏳ **Position First** draft mode; **Classic** single-league + §5b "global team in one real league" (needs real-league opponents) — rejected at `create` for now.
-- **Phase 3:** AI legends pack (icons retired pre-2014); async LLM flavour text (never block the results endpoint). Deeper playback (per-minute ticker / commentary). Monte-Carlo projection (the "real bookies" method — simulate the season N times).
+- **Phase 3:**
+    - ✅ **Monte-Carlo projection** (the "real bookies") — `MonteCarlo.run` simulates the user's exact season N=1000× via `MatchEngine.fastScore` (scoreline-only, sub-second), yielding genuine odds (title/top-4/relegation/unbeaten) + a points distribution. Shown pre-season (cloud + likely range on the league screen) and in the debrief (the actual season placed in the cloud + a percentile verdict, `Distribution` component). Same opponents/seed as the live sim, so preview and debrief agree.
+    - ⏳ AI legends pack (icons retired pre-2014); async LLM flavour text (never block the results endpoint); deeper playback (per-minute ticker / commentary).
 
 ## Conventions
 

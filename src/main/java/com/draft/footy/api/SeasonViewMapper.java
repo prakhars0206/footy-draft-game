@@ -1,5 +1,6 @@
 package com.draft.footy.api;
 
+import com.draft.footy.MonteCarlo;
 import com.draft.footy.Projection;
 import com.draft.footy.SeasonSimulator;
 import com.draft.footy.Xi;
@@ -23,6 +24,18 @@ public final class SeasonViewMapper {
                           List<PlayerStatView> players) { }
     public record StatRow(String player, String team, int value) { }
     public record OddsView(int expectedPoints, double winLeague, double top4, double relegation) { }
+    /** Monte-Carlo "real bookies": odds + a points distribution from N simulated seasons. `percentile` is the
+     *  actual season's rank in that cloud (debrief only; null pre-season). */
+    public record MonteCarloView(int sims, double mean, int min, int p5, int p25, int median, int p75, int p95, int max,
+                                 double title, double top4, double top6, double relegation, double unbeaten, double perfect,
+                                 int histMin, int histBinWidth, int[] histogram, Integer percentile) { }
+
+    public static MonteCarloView mcView(MonteCarlo.Outcome o, Integer percentile) {
+        if (o == null) return null;
+        return new MonteCarloView(o.sims(), o.meanPoints(), o.min(), o.p5(), o.p25(), o.median(), o.p75(), o.p95(), o.max(),
+            o.titleOdds(), o.top4Odds(), o.top6Odds(), o.relegationOdds(), o.unbeatenOdds(), o.perfectOdds(),
+            o.histMin(), o.histBinWidth(), o.histogram(), percentile);
+    }
     /** Player of the Season — full line, so the UI can show why they won it. */
     public record PlayerAward(String player, String team, int goals, int assists, int cleanSheets) { }
     public record SeasonView(
@@ -31,7 +44,7 @@ public final class SeasonViewMapper {
         int finishPos, int points, int won, int drawn, int lost, int goalsFor, int goalsAgainst,
         int biggestWin, int longestWinStreak,
         List<TeamRow> table, List<StatRow> goldenBoot, List<StatRow> topAssists, List<StatRow> goldenGlove,
-        PlayerAward playerOfSeason) { }
+        PlayerAward playerOfSeason, MonteCarloView monteCarlo) { }
 
     // ---- matchday playback ----
     public record GoalView(String scorer, int minute, boolean home) { }
@@ -43,7 +56,9 @@ public final class SeasonViewMapper {
     /** The whole season to play back, plus the final debrief shown at the end. */
     public record SeasonReplayView(List<MatchdayView> matchdays, SeasonView debrief) { }
 
-    public static SeasonView toView(SeasonSimulator.SeasonResult res) {
+    public static SeasonView toView(SeasonSimulator.SeasonResult res) { return toView(res, null); }
+
+    public static SeasonView toView(SeasonSimulator.SeasonResult res, MonteCarlo.Outcome mc) {
         Xi userXi = res.userStanding().team;
         var user = res.userStanding();
 
@@ -95,11 +110,14 @@ public final class SeasonViewMapper {
             res.topScorers().stream().map(s -> new StatRow(s.player.name(), s.team, s.goals)).limit(10).toList(),
             res.topAssists().stream().map(s -> new StatRow(s.player.name(), s.team, s.assists)).limit(10).toList(),
             res.goldenGlove().stream().map(s -> new StatRow(s.player.name(), s.team, s.cleanSheets)).limit(10).toList(),
-            potsView);
+            potsView,
+            mcView(mc, mc == null ? null : mc.percentile(user.points())));
     }
 
-    /** Build the playback payload — the matchday-by-matchday log + the final debrief. */
-    public static SeasonReplayView toReplay(SeasonSimulator.SeasonResult res) {
+    public static SeasonReplayView toReplay(SeasonSimulator.SeasonResult res) { return toReplay(res, null); }
+
+    /** Build the playback payload — the matchday-by-matchday log + the final debrief (with Monte-Carlo cloud). */
+    public static SeasonReplayView toReplay(SeasonSimulator.SeasonResult res, MonteCarlo.Outcome mc) {
         List<MatchdayView> mds = new ArrayList<>();
         for (var md : res.matchdays()) {
             List<MatchView> matches = md.matches().stream().map(m -> new MatchView(
@@ -110,7 +128,7 @@ public final class SeasonViewMapper {
                 s.gf(), s.ga(), s.gd(), s.points())).toList();
             mds.add(new MatchdayView(md.number(), matches, table));
         }
-        return new SeasonReplayView(mds, toView(res));
+        return new SeasonReplayView(mds, toView(res, mc));
     }
 
     /** "Real Madrid CF 2018/19 (4-3-3)" -> "Real Madrid CF 2018/19" (the formation is its own field). */

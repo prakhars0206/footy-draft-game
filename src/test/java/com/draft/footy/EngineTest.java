@@ -244,6 +244,24 @@ class EngineTest {
         for (Player p : pool) assertEquals(p, prime.prime(p), "single-edition prime must be a no-op");
     }
 
+    @Test
+    void monteCarloIsDeterministicAndOrdered() throws Exception {
+        var clubs = clubs(); var pool = pool(clubs);
+        var opps = new OpponentPyramid(clubs).generate(new Random(7L));
+        var strong = MonteCarlo.run(buildXi(pool, 90), opps, 300, 7L);
+        var strongAgain = MonteCarlo.run(buildXi(pool, 90), opps, 300, 7L);
+        var weak = MonteCarlo.run(buildXi(pool, 78), opps, 300, 7L);
+
+        assertEquals(strong.median(), strongAgain.median(), "same seed ⇒ identical distribution");
+        assertArrayEquals(strong.histogram(), strongAgain.histogram(), "same seed ⇒ identical histogram");
+        assertTrue(strong.median() > weak.median() + 10,
+            "stronger squad ⇒ higher median (" + strong.median() + " vs " + weak.median() + ")");
+        assertTrue(strong.titleOdds() > weak.titleOdds(), "stronger squad ⇒ better title odds");
+        assertTrue(strong.top4Odds() >= 0 && strong.top4Odds() <= 1, "odds are probabilities");
+        assertTrue(strong.p95() >= strong.p5(), "quantiles ordered");
+        assertTrue(strong.percentile(strong.max()) >= strong.percentile(strong.min()), "percentile is monotonic");
+    }
+
     private double avgPoints(List<ClubSeason> clubs, List<Player> pool, int target, int n) {
         long total = 0;
         for (int s = 0; s < n; s++) total += simulatePoints(clubs, pool, target, 1000L + s);

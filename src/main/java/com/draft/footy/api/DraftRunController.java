@@ -61,7 +61,8 @@ public class DraftRunController {
     public record LeagueTeamView(String team, int strength, String tier, String formation, List<XiSlotView> xi,
                                  int projectedPoints, int projectedPos) { }
     public record PreviewView(SeasonViewMapper.OddsView projection, int userOverall, int leagueMean,
-                              int userProjectedPos, List<LeagueTeamView> league) { }
+                              int userProjectedPos, List<LeagueTeamView> league,
+                              SeasonViewMapper.MonteCarloView monteCarlo) { }
 
     // ---- endpoints ----
 
@@ -136,12 +137,13 @@ public class DraftRunController {
             .sorted(Comparator.comparingInt(LeagueTeamView::projectedPos))
             .toList();
         return new PreviewView(new SeasonViewMapper.OddsView(o.expectedPoints(), o.winLeague(), o.top4(), o.relegation()),
-            p.userOverall(), p.leagueMean(), userProjPos, league);
+            p.userOverall(), p.leagueMean(), userProjPos, league, SeasonViewMapper.mcView(p.monteCarlo(), null));
     }
 
     @PostMapping("/{id}/simulate")
     public SeasonViewMapper.SeasonReplayView simulate(@PathVariable String id) {
-        return SeasonViewMapper.toReplay(service.simulate(id));
+        var sim = service.simulate(id);
+        return SeasonViewMapper.toReplay(sim.result(), sim.monteCarlo());
     }
 
     // ---- rendering ----

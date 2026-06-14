@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { SeasonView, TeamRow } from '../api'
 import { Panel, Stamp } from '../components/primitives'
 import { TeamPitch } from '../components/TeamPitch'
+import { Distribution } from '../components/Distribution'
 
 export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewRun: () => void }) {
   const [tableView, setTableView] = useState<'actual' | 'projected'>('actual')
@@ -67,13 +68,42 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
         </Reveal>
       )}
 
-      <Reveal>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Odds label="Win League" v={season.projection.winLeague} />
-          <Odds label="Top 4" v={season.projection.top4} />
-          <Odds label="Relegation" v={season.projection.relegation} />
-        </div>
-      </Reveal>
+      {season.monteCarlo && season.monteCarlo.percentile != null ? (
+        <Reveal>
+          <Panel label={`Against the Odds · ${season.monteCarlo.sims.toLocaleString()} simulated seasons`} accent="amber" className="p-5">
+            <div className="grid gap-6 sm:grid-cols-[1.5fr_1fr]">
+              <div>
+                <div className="flex items-baseline gap-3">
+                  <div className="font-display text-5xl font-black leading-none text-amber">{ordinal(season.monteCarlo.percentile)}</div>
+                  <div className="font-display text-[15px] italic text-ink/70">{cloudPhrase(season.monteCarlo.percentile)}</div>
+                </div>
+                <div className="mt-1 text-[12px] text-ink/50">
+                  your <span className="tabular-nums text-ink-bright">{season.points}</span> pts beat <span className="tabular-nums text-ink-bright">{season.monteCarlo.percentile}%</span> of the seasons this squad could have had
+                </div>
+                <div className="mt-4"><Distribution mc={season.monteCarlo} actual={season.points} height="h-24" /></div>
+                <div className="mt-2 flex gap-4 text-[10px] text-ink/45">
+                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber" />your season</span>
+                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-ink/45" />median ({season.monteCarlo.median})</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-2 self-center sm:grid-cols-1">
+                <Mc label="Title" v={season.monteCarlo.title} />
+                <Mc label="Top 4" v={season.monteCarlo.top4} />
+                <Mc label="Relegation" v={season.monteCarlo.relegation} />
+                <Mc label="Unbeaten" v={season.monteCarlo.unbeaten} tone="phosphor" />
+              </div>
+            </div>
+          </Panel>
+        </Reveal>
+      ) : (
+        <Reveal>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Odds label="Win League" v={season.projection.winLeague} />
+            <Odds label="Top 4" v={season.projection.top4} />
+            <Odds label="Relegation" v={season.projection.relegation} />
+          </div>
+        </Reveal>
+      )}
 
       <Reveal>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -210,6 +240,23 @@ function Tile({ label, value, sub }: { label: string; value: string | number; su
     </Panel>
   )
 }
+
+function Mc({ label, v, tone = 'amber' }: { label: string; v: number; tone?: 'amber' | 'phosphor' }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 border-b border-edge pb-1">
+      <span className="eyebrow text-ink/50">{label}</span>
+      <span className={`font-bold tabular-nums ${tone === 'phosphor' ? 'text-phosphor' : 'text-amber'}`}>{Math.round(v * 100)}%</span>
+    </div>
+  )
+}
+
+const cloudPhrase = (p: number) =>
+  p >= 97 ? 'a season for the ages'
+    : p >= 85 ? 'a remarkable campaign'
+      : p >= 65 ? 'a strong season'
+        : p >= 40 ? 'about par for this squad'
+          : p >= 15 ? 'a frustrating year'
+            : 'a campaign to forget'
 
 function Odds({ label, v }: { label: string; v: number }) {
   const pct = Math.round(v * 100)

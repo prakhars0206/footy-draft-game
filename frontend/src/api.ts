@@ -103,12 +103,23 @@ export interface LeagueTeam {
   projectedPoints: number
   projectedPos: number
 }
+export interface MonteCarlo {
+  sims: number
+  mean: number
+  min: number; p5: number; p25: number; median: number; p75: number; p95: number; max: number
+  title: number; top4: number; top6: number; relegation: number; unbeaten: number; perfect: number
+  histMin: number
+  histBinWidth: number
+  histogram: number[]
+  percentile: number | null // the actual season's rank in the cloud (debrief only)
+}
 export interface Preview {
   projection: Odds
   userOverall: number
   leagueMean: number
   userProjectedPos: number
   league: LeagueTeam[]
+  monteCarlo: MonteCarlo
 }
 
 export interface SquadPlayer {
@@ -180,6 +191,7 @@ export interface SeasonView {
   topAssists: StatRow[]
   goldenGlove: StatRow[]
   playerOfSeason: PlayerAward | null
+  monteCarlo: MonteCarlo | null
 }
 
 // ---- matchday playback ----

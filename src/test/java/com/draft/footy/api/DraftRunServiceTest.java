@@ -67,7 +67,7 @@ class DraftRunServiceTest {
         var run = service.create(cmd(101L, ShowRatings.ON, PlayerRatings.CAREER));
         completeDraft(run.getId());
 
-        var res = service.simulate(run.getId());
+        var res = service.simulate(run.getId()).result();
         assertEquals(20, res.table().size(), "league should have 20 teams");
         assertEquals(38, res.userStanding().won + res.userStanding().drawn + res.userStanding().lost,
             "user should play 38 games");
@@ -119,8 +119,8 @@ class DraftRunServiceTest {
         var b = service.create(cmd(2024L, ShowRatings.ON, PlayerRatings.CAREER));
         completeDraft(a.getId());
         completeDraft(b.getId());
-        var ra = service.simulate(a.getId());
-        var rb = service.simulate(b.getId());
+        var ra = service.simulate(a.getId()).result();
+        var rb = service.simulate(b.getId()).result();
         assertEquals(ra.userStanding().points(), rb.userStanding().points(), "same seed + picks ⇒ same points");
         assertEquals(ra.userPosition(), rb.userPosition(), "same seed + picks ⇒ same finish");
     }

@@ -41,7 +41,13 @@ public class DraftRunService {
     public record DraftResult(DraftRunEntity run, ClubSeason squad, int draftedId) { }
 
     /** Pre-season preview once the XI is complete: the league you'll face + a league-aware projection. */
-    public record LeaguePreview(Projection.Odds projection, int userOverall, int leagueMean, List<Xi> league) { }
+    public record LeaguePreview(Projection.Odds projection, int userOverall, int leagueMean, List<Xi> league,
+                               MonteCarlo.Outcome monteCarlo) { }
+    /** A simulated season plus its Monte-Carlo distribution (so the debrief can place the season in the cloud). */
+    public record SimOutcome(SeasonSimulator.SeasonResult result, MonteCarlo.Outcome monteCarlo) { }
+
+    /** N seasons for the "real bookies" projection — sub-second via MatchEngine.fastScore, stable odds. */
+    private static final int MC_SIMS = 1000;
 
     public DraftRunEntity create(CreateRunCommand cmd) {
         if (cmd.leagueScope() == LeagueScope.CLASSIC)
@@ -112,10 +118,13 @@ public class DraftRunService {
         // Same seed → the same 19 teams simulate() will field (it generates with new Random(seed) first too).
         List<Xi> league = new OpponentPyramid(catalog.clubs()).generate(new Random(run.getSeed()));
         int leagueMean = (int) Math.round(league.stream().mapToInt(Xi::overall).average().orElse(LeagueProjection.REF_MEAN));
-        int userOverall = buildUserXi(run).overall();
+        Xi userXi = buildUserXi(run);
+        int userOverall = userXi.overall();
+        // The "real bookies": simulate this exact season N times for genuine odds + a distribution.
+        MonteCarlo.Outcome mc = MonteCarlo.run(userXi, league, MC_SIMS, run.getSeed());
         // League-aware: a softer league makes you effectively stronger, a brutal one weaker, than the reference.
         // leagueMean here is the mean of the 19 opponents = the user's "mean of others" — matches the debrief.
-        return new LeaguePreview(LeagueProjection.odds(userOverall, leagueMean), userOverall, leagueMean, league);
+        return new LeaguePreview(LeagueProjection.odds(userOverall, leagueMean), userOverall, leagueMean, league, mc);
     }
 
     /** Reposition an already-drafted player from one slot to an open slot they can also play (§5B). */
@@ -136,7 +145,7 @@ public class DraftRunService {
     }
 
     /** Simulate the season once all 11 are drafted; seeded so it's reproducible (and re-playable). */
-    public SeasonSimulator.SeasonResult simulate(String runId) {
+    public SimOutcome simulate(String runId) {
         DraftRunEntity run = get(runId);
         if (!run.isComplete())
             throw bad("draft incomplete: " + run.openSlots().size() + " slot(s) still open");
@@ -145,8 +154,10 @@ public class DraftRunService {
         Random rng = new Random(run.getSeed());
         List<Xi> opponents = new OpponentPyramid(catalog.clubs()).generate(rng);
         SeasonSimulator.SeasonResult result = new SeasonSimulator().simulate(userXi, opponents, rng);
+        // Same opponents + same seed base as the pre-season preview → the debrief's odds/cloud match it exactly.
+        MonteCarlo.Outcome mc = MonteCarlo.run(userXi, opponents, MC_SIMS, run.getSeed());
         run.setStatus(RunStatus.SIMULATED);
-        return result;
+        return new SimOutcome(result, mc);
     }
 
     // --- helpers ---

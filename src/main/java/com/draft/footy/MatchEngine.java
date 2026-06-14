@@ -51,6 +51,16 @@ public final class MatchEngine {
         return Math.min(BASE_GOALS * Math.exp(diff / SCALE), MAX_LAMBDA);
     }
 
+    /**
+     * Scoreline only — no goal attribution or events. Same Dixon-Coles draw as {@link #play}, but cheap enough
+     * to run a whole season thousands of times (the Monte-Carlo "real bookies" projection).
+     */
+    public int[] fastScore(Xi home, Xi away, double homeForm, double awayForm, Random rng) {
+        double lh = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, +HOME_ADV);
+        double la = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, -HOME_ADV);
+        return sampleScore(lh, la, rng);
+    }
+
     private GoalEvent makeGoal(Xi team, boolean home, Random rng) {
         Player scorer = pick(team, true, rng, null);
         Player assist = rng.nextDouble() < 0.78 ? pick(team, false, rng, scorer) : null;

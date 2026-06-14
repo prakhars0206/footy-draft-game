@@ -10,12 +10,14 @@ import { TeamPitch } from '../components/TeamPitch'
 import { SpinReveal } from '../components/SpinReveal'
 import { RatingBadge } from '../components/RatingBadge'
 import { PositionChip } from '../components/PositionChip'
+import { Distribution } from '../components/Distribution'
 import { Panel, Prompt, Stamp } from '../components/primitives'
 
 const ordinal = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
 }
+const pct = (v: number) => `${Math.round(v * 100)}%`
 
 const TIER_COLOR: Record<string, string> = {
   JUGGERNAUT: 'text-amber border-amber',
@@ -223,6 +225,7 @@ function DeclassifiedPanel({
 
 function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | null; busy: boolean; onRun: () => void; onInspect: (t: LeagueTeam) => void }) {
   const p = preview?.projection
+  const mc = preview?.monteCarlo
   return (
     <Panel label="The League · pre-season" accent="amber" className="flex min-h-0 flex-1 flex-col p-4">
       <div className="shrink-0">
@@ -239,10 +242,19 @@ function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | n
             <span className="eyebrow">League Mean</span> <span className="text-ink-bright">{preview?.leagueMean ?? '—'}</span>
           </div>
         </div>
+        {mc && (
+          <div className="mt-3">
+            <Distribution mc={mc} height="h-12" />
+            <div className="mt-1 text-[11px] text-ink/45">
+              <span className="font-display italic">{mc.sims.toLocaleString()} simulated seasons</span> · likely <span className="tabular-nums text-ink-bright">{mc.p25}–{mc.p75}</span> pts
+              {mc.unbeaten > 0 && <> · unbeaten <span className="tabular-nums text-phosphor">{pct(mc.unbeaten)}</span></>}
+            </div>
+          </div>
+        )}
         <div className="mt-4 space-y-1.5">
-          <OddsRow label="Win League" v={p?.winLeague ?? 0} />
-          <OddsRow label="Top 4" v={p?.top4 ?? 0} />
-          <OddsRow label="Relegation" v={p?.relegation ?? 0} />
+          <OddsRow label="Title" v={mc?.title ?? p?.winLeague ?? 0} />
+          <OddsRow label="Top 4" v={mc?.top4 ?? p?.top4 ?? 0} />
+          <OddsRow label="Relegation" v={mc?.relegation ?? p?.relegation ?? 0} />
         </div>
         <div className="mt-4 mb-1 flex items-center gap-2 border-b border-edge pb-1">
           <span className="eyebrow w-5 text-right text-ink/45">#</span><span className="eyebrow flex-1 text-ink/45">Opponents · tap to scout</span><span className="eyebrow w-11 text-right text-ink/45">Proj</span><span className="eyebrow w-7 text-right text-ink/45">OVR</span>
