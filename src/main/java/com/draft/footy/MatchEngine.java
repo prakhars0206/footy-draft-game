@@ -8,10 +8,10 @@ import java.util.Random;
 public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
-    static final double BASE_GOALS = 1.21;  // league-average goals per team in a balanced game
-    static final double SCALE      = 16.5;  // how sharply strength gaps translate to goals (larger = gentler)
-    static final double HOME_ADV   = 4.5;   // home edge, in overall-rating points
-    static final double MAX_LAMBDA = 4.0;   // clamp to avoid absurd blowouts
+    static final double BASE_GOALS = 1.15;  // league-average goals per team in a balanced game
+    static final double SCALE      = 16;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double HOME_ADV   = 3;   // home edge, in overall-rating points
+    static final double MAX_LAMBDA = 2.5;   // clamp to avoid absurd blowouts
 
     // Dixon-Coles low-score correction: independent Poisson under-predicts 0-0/1-1 draws (scorelines are
     // correlated). RHO < 0 shifts mass from 1-0/0-1 into 0-0/1-1, lifting the draw rate to a realistic band.

@@ -82,7 +82,7 @@ class EngineTest {
     void eliteTeamLandsNearProjection() throws Exception {
         var clubs = clubs(); var pool = pool(clubs);
         double avg = avgPoints(clubs, pool, 90, 120);
-        assertTrue(avg > 85 && avg < 102, "90-rated avg points should sit near the ~95 projection, was " + avg);
+        assertTrue(avg > 86 && avg < 96, "90-rated avg points should sit near the ~91 projection (real champion mark), was " + avg);
     }
 
     @Test

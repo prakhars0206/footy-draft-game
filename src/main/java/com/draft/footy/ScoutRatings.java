@@ -20,7 +20,7 @@ public final class ScoutRatings {
     public static Band band(int sofifaId, long runSeed, int trueOverall) {
         // Mix the seed and id into one stable stream (golden-ratio multiplier to scatter nearby ids).
         Random r = new Random(runSeed * 2654435761L + sofifaId);
-        int width  = 4 + r.nextInt(9);          // 4..12 — varies per player, so elites aren't always obvious
+        int width  = 4 + r.nextInt(7);          // 4..10 — varies per player, so elites aren't always obvious
         int below  = r.nextInt(width + 1);       // 0..width below the true value — the asymmetry
         int low    = trueOverall - below;
         int high   = low + width;

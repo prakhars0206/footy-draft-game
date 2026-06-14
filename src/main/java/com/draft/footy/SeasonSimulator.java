@@ -15,7 +15,7 @@ public final class SeasonSimulator {
      * season — leaves the long-run average (and the projection) intact while making a single season swing, so
      * teams genuinely over/under-perform. The drama dial: larger = more upsets/surprises.
      */
-    static final double FORM_SIGMA = 2.0;
+    static final double FORM_SIGMA = 0.9;
 
     private final MatchEngine engine = new MatchEngine();
 
