@@ -18,12 +18,16 @@ public final class MonteCarlo {
      * Aggregated outcome of N simulated seasons. {@code sortedPoints} (ascending) backs {@link #percentile} so the
      * actual season can be placed in the cloud; the rest is a ready-to-render summary (odds, quantiles, histogram).
      */
+    /** A team's "real bookies" projection: expected (mean) points and projected finish (rank by mean points). */
+    public record TeamProj(int projectedPoints, int projectedPos) { }
+
     public record Outcome(
         int sims, double meanPoints,
         int min, int p5, int p25, int median, int p75, int p95, int max,
         double titleOdds, double top4Odds, double top6Odds, double relegationOdds, double unbeatenOdds, double perfectOdds,
         int histMin, int histBinWidth, int[] histogram,
-        int[] sortedPoints
+        int[] sortedPoints,
+        java.util.Map<Xi, TeamProj> teamProjections   // every team's projection, from the same sims (free)
     ) {
         /** Share of simulated seasons that finished on FEWER points than {@code pts} — "you beat X% of seasons". */
         public int percentile(int pts) {
@@ -43,6 +47,7 @@ public final class MonteCarlo {
         MatchEngine engine = new MatchEngine();
 
         int[] points = new int[sims];
+        long[] teamPointsSum = new long[n];           // accumulate every team's points → per-team mean (projection)
         int title = 0, top4 = 0, top6 = 0, releg = 0, unbeaten = 0, perfect = 0;
 
         for (int s = 0; s < sims; s++) {
@@ -64,6 +69,8 @@ public final class MonteCarlo {
                 }
             }
 
+            for (int t = 0; t < n; t++) teamPointsSum[t] += pts[t];
+
             int up = pts[0], ugd = gd[0];
             int pos = 1;                              // 1 + teams ranked strictly above the user (points, then GD)
             for (int t = 1; t < n; t++)
@@ -78,6 +85,18 @@ public final class MonteCarlo {
             if (userWins == 38) perfect++;
         }
 
+        // Per-team projection: expected (mean) points, and projected finish = rank by that mean (1 = best).
+        double[] teamMean = new double[n];
+        for (int t = 0; t < n; t++) teamMean[t] = (double) teamPointsSum[t] / sims;
+        Integer[] order = new Integer[n];
+        for (int t = 0; t < n; t++) order[t] = t;
+        java.util.Arrays.sort(order, (x, y) -> Double.compare(teamMean[y], teamMean[x]));
+        java.util.Map<Xi, TeamProj> projections = new java.util.HashMap<>();
+        for (int rank = 0; rank < n; rank++) {
+            int t = order[rank];
+            projections.put(teams[t], new TeamProj((int) Math.round(teamMean[t]), rank + 1));
+        }
+
         java.util.Arrays.sort(points);
         int min = points[0], max = points[sims - 1];
         int binW = Math.max(1, (int) Math.ceil((max - min + 1) / 22.0));
@@ -89,7 +108,7 @@ public final class MonteCarlo {
             min, q(points, 0.05), q(points, 0.25), q(points, 0.50), q(points, 0.75), q(points, 0.95), max,
             (double) title / sims, (double) top4 / sims, (double) top6 / sims,
             (double) releg / sims, (double) unbeaten / sims, (double) perfect / sims,
-            min, binW, hist, points);
+            min, binW, hist, points, projections);
     }
 
     private static double mean(int[] a) {

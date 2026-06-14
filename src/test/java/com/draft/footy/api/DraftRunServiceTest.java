@@ -173,9 +173,9 @@ class DraftRunServiceTest {
     void preSeasonAndDebriefProjectionsAgree() {
         var run = service.create(cmd(2025L, ShowRatings.ON, PlayerRatings.CAREER));
         completeDraft(run.getId());
-        int presim = service.preview(run.getId()).projection().expectedPoints();
+        int presim = controller.preview(run.getId()).projection().expectedPoints();
         var view = controller.simulate(run.getId()).debrief();
-        assertEquals(presim, view.projection().expectedPoints(), "debrief projection must match the pre-sim one");
+        assertEquals(presim, view.projection().expectedPoints(), "debrief projection must match the pre-sim one (both Monte-Carlo)");
         var you = view.table().stream().filter(SeasonViewMapper.TeamRow::you).findFirst().orElseThrow();
         assertEquals(presim, you.projectedPoints(), "your row's projected points must match the projection");
     }

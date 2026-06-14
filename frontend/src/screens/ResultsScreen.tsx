@@ -13,11 +13,17 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
   const proj = season.projection.expectedPoints
   const projPos = season.table.find((t) => t.you)?.projectedPos ?? season.finishPos
   const move = projPos - season.finishPos // + = finished HIGHER than the bookies projected
-  // Verdict is the achievement (where you finished vs where you were projected) — what actually matters in a season.
+  // Verdict is driven by the Monte-Carlo percentile — did this season beat most of the campaigns this squad could
+  // have had? (Falls back to projected-vs-actual position when there's no cloud, e.g. the stateless demo.)
+  const pctile = season.monteCarlo?.percentile ?? null
   const verdict =
-    move >= 3 ? { text: 'OVERPERFORMED', tone: 'phosphor' as const }
-      : move <= -3 ? { text: 'UNDERPERFORMED', tone: 'danger' as const }
-        : { text: 'AS EXPECTED', tone: 'amber' as const }
+    pctile != null
+      ? (pctile >= 70 ? { text: 'OVERPERFORMED', tone: 'phosphor' as const }
+        : pctile <= 30 ? { text: 'UNDERPERFORMED', tone: 'danger' as const }
+          : { text: 'AS EXPECTED', tone: 'amber' as const })
+      : (move >= 3 ? { text: 'OVERPERFORMED', tone: 'phosphor' as const }
+        : move <= -3 ? { text: 'UNDERPERFORMED', tone: 'danger' as const }
+          : { text: 'AS EXPECTED', tone: 'amber' as const })
   const unbeaten = season.lost === 0
   const perfect = season.won === 38
 

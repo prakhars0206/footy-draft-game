@@ -42,7 +42,7 @@ public class DraftRunService {
 
     /** Pre-season preview once the XI is complete: the league you'll face + a league-aware projection. */
     public record LeaguePreview(Projection.Odds projection, int userOverall, int leagueMean, List<Xi> league,
-                               MonteCarlo.Outcome monteCarlo) { }
+                               MonteCarlo.Outcome monteCarlo, Xi userXi) { }
     /** A simulated season plus its Monte-Carlo distribution (so the debrief can place the season in the cloud). */
     public record SimOutcome(SeasonSimulator.SeasonResult result, MonteCarlo.Outcome monteCarlo) { }
 
@@ -124,7 +124,7 @@ public class DraftRunService {
         MonteCarlo.Outcome mc = MonteCarlo.run(userXi, league, MC_SIMS, run.getSeed());
         // League-aware: a softer league makes you effectively stronger, a brutal one weaker, than the reference.
         // leagueMean here is the mean of the 19 opponents = the user's "mean of others" — matches the debrief.
-        return new LeaguePreview(LeagueProjection.odds(userOverall, leagueMean), userOverall, leagueMean, league, mc);
+        return new LeaguePreview(LeagueProjection.odds(userOverall, leagueMean), userOverall, leagueMean, league, mc, userXi);
     }
 
     /** Reposition an already-drafted player from one slot to an open slot they can also play (§5B). */

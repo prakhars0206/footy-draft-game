@@ -64,18 +64,26 @@ public final class SeasonViewMapper {
 
         int n = res.table().size();
         int totalOverall = res.table().stream().mapToInt(st -> st.team.overall()).sum();
-        // Each team's league-aware projected points: shift its rating by how soft/tough the OTHER teams are.
+        // Each team's projection: the Monte-Carlo "real bookies" (mean points + rank) when we have it, else the
+        // fitted league-aware curve (the stateless demo path, mc == null). Same source as the pre-sim panel.
         Map<Xi, Integer> projPoints = new HashMap<>();
-        for (var st : res.table()) {
-            int meanOthers = (int) Math.round((totalOverall - st.team.overall()) / (double) (n - 1));
-            projPoints.put(st.team, LeagueProjection.expectedPoints(st.team.overall(), meanOthers));
-        }
-        // Projected table order = rank by those projected points (the bookies' pre-season table).
-        List<Xi> byProjected = res.table().stream().map(st -> st.team)
-            .sorted(Comparator.comparingInt((Xi t) -> projPoints.get(t)).reversed())
-            .toList();
         Map<Xi, Integer> projPos = new HashMap<>();
-        for (int i = 0; i < byProjected.size(); i++) projPos.put(byProjected.get(i), i + 1);
+        if (mc != null) {
+            for (var st : res.table()) {
+                var tp = mc.teamProjections().get(st.team);
+                projPoints.put(st.team, tp.projectedPoints());
+                projPos.put(st.team, tp.projectedPos());
+            }
+        } else {
+            for (var st : res.table()) {
+                int meanOthers = (int) Math.round((totalOverall - st.team.overall()) / (double) (n - 1));
+                projPoints.put(st.team, LeagueProjection.expectedPoints(st.team.overall(), meanOthers));
+            }
+            List<Xi> byProjected = res.table().stream().map(st -> st.team)
+                .sorted(Comparator.comparingInt((Xi t) -> projPoints.get(t)).reversed())
+                .toList();
+            for (int i = 0; i < byProjected.size(); i++) projPos.put(byProjected.get(i), i + 1);
+        }
 
         List<TeamRow> table = new ArrayList<>();
         for (int i = 0; i < res.table().size(); i++) {
@@ -93,9 +101,17 @@ public final class SeasonViewMapper {
                 s.points(), s.won, s.drawn, s.lost, s.gf, s.ga, s.gd(), s.team == userXi, players));
         }
 
-        // Debrief projection = the SAME league-aware projection the pre-sim panel showed (mean of the other 19).
-        int userMeanOthers = (int) Math.round((totalOverall - userXi.overall()) / (double) (n - 1));
-        Projection.Odds odds = LeagueProjection.odds(userXi.overall(), userMeanOthers);
+        // Debrief headline projection — Monte-Carlo (expected points + real odds) when present, else the fitted
+        // curve, matching whatever the pre-sim panel showed.
+        OddsView oddsView;
+        if (mc != null) {
+            var userTp = mc.teamProjections().get(userXi);
+            oddsView = new OddsView(userTp.projectedPoints(), mc.titleOdds(), mc.top4Odds(), mc.relegationOdds());
+        } else {
+            int userMeanOthers = (int) Math.round((totalOverall - userXi.overall()) / (double) (n - 1));
+            Projection.Odds odds = LeagueProjection.odds(userXi.overall(), userMeanOthers);
+            oddsView = new OddsView(odds.expectedPoints(), odds.winLeague(), odds.top4(), odds.relegation());
+        }
 
         var pots = res.playerOfSeason();
         PlayerAward potsView = pots == null ? null
@@ -103,7 +119,7 @@ public final class SeasonViewMapper {
 
         return new SeasonView(
             userXi.overall(), userXi.attack(), userXi.midfield(), userXi.defence(), userXi.gk(),
-            new OddsView(odds.expectedPoints(), odds.winLeague(), odds.top4(), odds.relegation()),
+            oddsView,
             res.userPosition(), user.points(), user.won, user.drawn, user.lost, user.gf, user.ga,
             res.biggestWinFor(), res.longestWinStreak(),
             table,
