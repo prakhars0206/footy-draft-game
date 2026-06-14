@@ -17,6 +17,13 @@ public final class SeasonSimulator {
      */
     static final double FORM_SIGMA = 0.9;
 
+    /**
+     * Player-of-the-Season team-success weight. The award scales a player's raw contribution (goals/assists/
+     * clean sheets) by where their team finished — like the real PFA/Ballon d'Or, winners come from the top.
+     * teamWeight = 1 + POTS_TEAM_WEIGHT·(N-pos)/(N-1): champion ×(1+W), bottom ×1. Larger = team matters more.
+     */
+    static final double POTS_TEAM_WEIGHT = 0.55;
+
     private final MatchEngine engine = new MatchEngine();
 
     public static final class Standing {
@@ -107,6 +114,10 @@ public final class SeasonSimulator {
         Standing user = standings.get(userXi);
         int pos = table.indexOf(user) + 1;
 
+        // Final league position per team, for the team-success weighting in Player of the Season.
+        Map<String, Integer> finishPos = new HashMap<>();
+        for (int i = 0; i < table.size(); i++) finishPos.put(table.get(i).team.name, i + 1);
+
         Map<Xi, List<PlayerStat>> teamStats = new HashMap<>();
         for (var e : stats.entrySet()) teamStats.put(e.getKey(), new ArrayList<>(e.getValue().values()));
 
@@ -115,7 +126,7 @@ public final class SeasonSimulator {
             topBy(stats, s -> s.assists, p -> true),
             // Golden Glove is the keepers' award — clean sheets are credited to the whole backline, so filter to GK.
             topBy(stats, s -> s.cleanSheets, p -> p.player.primaryLine() == Line.GK),
-            playerOfSeason(stats),
+            playerOfSeason(stats, finishPos, table.size()),
             biggest(userScores, true), biggest(userScores, false), longestStreak(userScores),
             teamStats, matchdays);
     }
@@ -170,13 +181,20 @@ public final class SeasonSimulator {
         if (gf > ga) s.won++; else if (gf == ga) s.drawn++; else s.lost++;
     }
 
-    /** Player of the Season — best all-round contribution across the whole league (goals + creation + clean sheets). */
-    private PlayerStat playerOfSeason(Map<Xi, Map<Integer, PlayerStat>> stats) {
+    /**
+     * Player of the Season — best all-round contribution (goals + creation + clean sheets), scaled by team
+     * success: the same output counts for more on a side that finished high, mirroring how the real award
+     * skews to title-winners and top-four talents (a relegation hero still needs to vastly outproduce to win).
+     */
+    private PlayerStat playerOfSeason(Map<Xi, Map<Integer, PlayerStat>> stats, Map<String, Integer> finishPos, int n) {
         PlayerStat best = null;
         double bestScore = -1;
         for (Map<Integer, PlayerStat> m : stats.values())
             for (PlayerStat s : m.values()) {
-                double score = s.goals * 4 + s.assists * 3 + s.cleanSheets * 2.0;
+                double contribution = s.goals * 4 + s.assists * 3 + s.cleanSheets * 2.0;
+                int pos = finishPos.getOrDefault(s.team, n);          // 1 = champion .. n = bottom
+                double teamWeight = 1 + POTS_TEAM_WEIGHT * (n - pos) / (double) (n - 1);
+                double score = contribution * teamWeight;
                 if (score > bestScore) { bestScore = score; best = s; }
             }
         return best;
