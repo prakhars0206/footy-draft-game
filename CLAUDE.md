@@ -74,16 +74,16 @@ Model: `lambda = min(BASE_GOALS * exp((attack - defence + home) / SCALE), MAX_LA
 - `HOME_ADV` — shifts edge from away to home.
 - `MAX_LAMBDA` — caps per-team expected goals; **lowering trims blowouts** (the lever for "too many goals" in a strong team's matches) with little points impact.
 - `RHO` — Dixon-Coles low-score correction; more negative ⇒ more 0-0/1-1 draws. The lever for the draw rate, fairly independent of the points spread.
-- **After ANY change here, re-run the calibration sweep** (`java -cp out com.draft.footy.Demo players_22.csv`): keep the 89/90 rows near their projection, the curve monotonic, the draw rate ~24%, and league avg ~2.7–2.9 goals/game.
+- **After ANY change here, re-run the calibration sweep** (`java -cp out com.draft.footy.Demo data/male_players_all.csv`, cross-check `players_22.csv`): keep the 90 row near its projection (~89), the curve monotonic, the draw rate ~24–26%, and league avg ~2.6–2.8 goals/game.
 
 **Who on a team scores (NO points impact) → `ScoringWeights` + `MatchEngine.ratingFactor`.**
 Per-position weights × rating factor. Validate by eyeballing the leaderboards: top scorer ~30–40, creators (wingers/CAMs) lead assists, no CDM/CB topping either. Steepen `ratingFactor` (square → cube) to concentrate goals on stars more.
 
 ## Calibration (in active tuning)
 
-Targets: monotonic (stronger → more points), top end ~92–94 pts for a 90-rated XI, **draw rate ~24%**, **~2.7–2.9 goals/game** league-wide, 38-0 rare-but-possible. The `Demo players_22.csv` sweep is the reference.
-- **Projection vs drama (deliberate design):** the projection is the *honest expectation*; the **per-season form (`SeasonSimulator.FORM_SIGMA`, currently 2.0) is the drama dial** — it gives each season a ~±8–10 pt swing (std), so teams genuinely over/under-perform (~25% of seasons swing ≥6 pts from their mean) without the projection lying. Larger `FORM_SIGMA` = more upsets/chaos.
-- **Projection (re-fit to the form-included sim):** `Projection.expectedPoints` = `3.3·overall − 206` (least-squares) and `LeagueProjection.REF_MEAN` = 77 (measured pyramid mean). Tracks the average within ~1 pt (75→42, 86→78, 90→91). **Tied to the `MatchEngine` constants + pyramid + `FORM_SIGMA` — re-run the sweep and refit whenever those move.**
+Targets (tuned to real top-5-league distributions): monotonic (stronger → more points), top end **~89 pts** for a 90-rated XI (the real champion mark — Invincibles 90, City 100), **draw rate ~24–26%**, **~2.6–2.8 goals/game** league-wide, a season's biggest win ~+5/+6 (a 6-0 is rare, not weekly), 38-0 rare-but-possible. **Calibrate against the multi-era pool the game actually plays** (`Demo data/male_players_all.csv`) — at the current constants it and `players_22` converge (~89 champion either way), so cross-check both.
+- **Projection vs drama (deliberate design):** the projection is the *honest expectation*; the **per-season form (`SeasonSimulator.FORM_SIGMA`, currently 0.9) is the drama dial** — each season swings without the projection lying. Larger `FORM_SIGMA` = more upsets/chaos.
+- **Projection (re-fit to the form-included sim):** `Projection.expectedPoints` = `3.1·overall − 189` (least-squares over both pools) and `LeagueProjection.REF_MEAN` = 77 (measured pyramid mean). Tracks the average within ~1–3 pt (75→42, 80→60, 86→79, 90→89). **Tied to the `MatchEngine` constants + pyramid + `FORM_SIGMA` — re-run the sweep and refit whenever those move** (esp. `SCALE`, the points-spread lever, and `MAX_LAMBDA`, the blowout cap).
 - **38-0 ~0% on single-season FIFA-22** — multi-season unlocks the rare-but-real perfect season.
 
 ## Status & roadmap
@@ -93,7 +93,7 @@ Targets: monotonic (stronger → more points), top end ~92–94 pts for a 90-rat
     - ✅ **Multi-season ingest** — combined FIFA 15–23 export (`data/male_players_all.csv`) → 880 club-seasons across 9 editions via a schema-flexible, `league_id`-keyed loader; **Prime Mode** career-best snapshots (`PrimeIndex`), exposed on the demo endpoint via `&prime=true`. *(In practice the normalization that mattered was `player_id`↔`sofifa_id` + per-edition league-name drift, solved by the stable numeric `league_id` — not `club`↔`club_name`.)*
     - ✅ **JPA + H2 seeding** (cert practice, not perf) — relational `ClubSeasonEntity`↔`PlayerEntity` + ordered positions join table; `DataSeeder` seeds H2 from the CSV at startup, `SimulationService` reads it back via the repository. H2 console at `/h2-console` (`jdbc:h2:mem:footy`). See `com.draft.footy.persistence`.
     - ✅ **Dixon-Coles draw correction** — `MatchEngine.sampleScore` draws correlated scorelines from the DC joint distribution (`RHO`), lifting the draw rate from ~17% (pure Poisson) to ~24%. Recalibrated (`SCALE` 16→14.5, `RHO` -0.11) so players_22 holds 89→~92 / 90→~94. See the tuning map above.
-    - ℹ️ **Calibration:** locked on the single-season **players_22** reference (`Demo players_22.csv`). The deeper multi-era pool runs a touch under (90 → ~92, draws ~18%) — expected, the opponent pyramid is the same tough league regardless of the user. `EngineTest` calibration assertions pin to `players_22.csv`.
+    - ℹ️ **Calibration:** now targets the **multi-era pool the game actually plays** (`data/male_players_all.csv`); at the current constants `players_22` and multi-era converge (~89 champion either way). `EngineTest` calibration assertions run on the multi-era pool (cached); only the Prime-Mode no-op test uses single-edition `players_22.csv`.
 - **Phase 2 (largely done — full playable loop):**
     - ✅ **Stateful `DraftRun` REST resource** (persisted H2, server-authoritative, seed-replayable). World Draft + Squad First; natural-positions-only; difficulty rerolls + free-reroll safeguard; Prime/Career; era filter.
     - ✅ **Scout fuzzy-ratings** (headline) — ON/SCOUT/OFF; true overall stripped in SCOUT/OFF; drafted players revealed on your own pitch; declassify reveal only in SCOUT/OFF.

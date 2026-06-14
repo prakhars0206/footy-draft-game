@@ -17,10 +17,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Encodes the invariants validated during the build:
  *  - the seeded RNG makes a season fully reproducible,
  *  - stronger teams earn more points (monotonic calibration),
- *  - a 90-rated team lands near its ~95-point projection,
+ *  - a 90-rated team lands near its ~89-point (real champion) projection,
  *  - structural sanity (20 teams, 38 games).
  *
- * These run against players_22.csv in the project root.
+ * Calibration runs against the multi-era pool (data/male_players_all.csv) — the pool the GAME actually
+ * plays — so the assertions track what a player really experiences. The Prime-Mode no-op test is the only
+ * one that needs a single edition (players_22.csv).
  */
 class EngineTest {
 
@@ -30,9 +32,21 @@ class EngineTest {
     static final java.util.Set<String> CANON_LEAGUES =
         java.util.Set.of("Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1");
 
+    // Cached across test methods — the multi-edition export is ~91MB, so load each pool only once.
+    private static List<ClubSeason> multiCache, singleCache;
+
+    /** The multi-era pool the GAME actually plays (FIFA 15–23); calibration asserts against this. */
     private List<ClubSeason> clubs() throws Exception {
+        assumeTrue(Files.exists(MULTI_CSV), "data/male_players_all.csv (FIFA 15–23 combined export) must be present");
+        if (multiCache == null) multiCache = FifaDataLoader.loadAllSeasons(MULTI_CSV);
+        return multiCache;
+    }
+
+    /** A single FIFA-22 edition — only for the Prime-Mode no-op test (one row per id). */
+    private List<ClubSeason> singleEditionClubs() throws Exception {
         assumeTrue(Files.exists(CSV), "players_22.csv must be in the project root");
-        return FifaDataLoader.loadTop5(CSV, 22);
+        if (singleCache == null) singleCache = FifaDataLoader.loadTop5(CSV, 22);
+        return singleCache;
     }
 
     private List<Player> pool(List<ClubSeason> clubs) {
@@ -82,7 +96,7 @@ class EngineTest {
     void eliteTeamLandsNearProjection() throws Exception {
         var clubs = clubs(); var pool = pool(clubs);
         double avg = avgPoints(clubs, pool, 90, 120);
-        assertTrue(avg > 86 && avg < 96, "90-rated avg points should sit near the ~91 projection (real champion mark), was " + avg);
+        assertTrue(avg > 85 && avg < 95, "90-rated avg points should sit near the ~89 projection (real champion mark), was " + avg);
     }
 
     @Test
@@ -98,8 +112,7 @@ class EngineTest {
 
     @Test
     void opponentLeagueNeverRepeatsAClubAcrossEras() throws Exception {
-        assumeTrue(Files.exists(MULTI_CSV), "data/male_players_all.csv must be present");
-        var clubs = FifaDataLoader.loadAllSeasons(MULTI_CSV);
+        var clubs = clubs(); // multi-era pool
         var club = java.util.regex.Pattern.compile("^(.*) \\d{4}/\\d{2} \\("); // "Liverpool 2020/21 (4-3-3)" -> "Liverpool"
         for (long seed = 0; seed < 30; seed++) {
             var league = new OpponentPyramid(clubs).generate(new Random(seed));
@@ -187,8 +200,7 @@ class EngineTest {
 
     @Test
     void multiSeasonIngestSpansEditionsAndOnlyTop5Leagues() throws Exception {
-        assumeTrue(Files.exists(MULTI_CSV), "data/male_players_all.csv (FIFA 15–23 combined export) must be present");
-        var clubs = FifaDataLoader.loadAllSeasons(MULTI_CSV);
+        var clubs = clubs(); // multi-era pool
 
         long editions = clubs.stream().map(c -> c.season).distinct().count();
         assertTrue(editions >= 8, "combined export should span ~9 editions, saw " + editions);
@@ -201,8 +213,7 @@ class EngineTest {
 
     @Test
     void primeModeTakesCareerBestSnapshot() throws Exception {
-        assumeTrue(Files.exists(MULTI_CSV), "data/male_players_all.csv (FIFA 15–23 combined export) must be present");
-        var clubs = FifaDataLoader.loadAllSeasons(MULTI_CSV);
+        var clubs = clubs(); // multi-era pool
         var pool = pool(clubs);
         PrimeIndex prime = PrimeIndex.from(clubs);
 
@@ -227,7 +238,7 @@ class EngineTest {
 
     @Test
     void primeModeIsNoOpOnSingleEdition() throws Exception {
-        var clubs = clubs(); // players_22.csv — one edition, one row per id
+        var clubs = singleEditionClubs(); // players_22.csv — one edition, one row per id
         var pool = pool(clubs);
         PrimeIndex prime = PrimeIndex.from(clubs);
         for (Player p : pool) assertEquals(p, prime.prime(p), "single-edition prime must be a no-op");
