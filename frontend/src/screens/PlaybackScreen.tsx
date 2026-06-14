@@ -5,6 +5,9 @@ import { Panel, Stamp } from '../components/primitives'
 
 const BASE_MS = 1100 // matchday advance interval at 1x
 
+// Drop the trailing season so a next-fixture label fits ("Real Madrid CF 2018/19" -> "Real Madrid CF").
+const shortClub = (n: string) => n.replace(/\s+\d{2,4}\/\d{2}$/, '').trim()
+
 export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onFinish: () => void }) {
   const total = replay.matchdays.length
   const [md, setMd] = useState(0)
@@ -36,6 +39,17 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   const day = replay.matchdays[md]
   const matches = [...day.matches].sort((a, b) => Number(b.userMatch) - Number(a.userMatch))
 
+  // Movement vs the previous matchday's table (▲/▼ next to the rank).
+  const prevRank = new Map<string, number>()
+  if (md > 0) replay.matchdays[md - 1].table.forEach((r, i) => prevRank.set(r.team, i))
+
+  // Each team's NEXT fixture (from the upcoming matchday) so you can see what's coming as the season rolls.
+  const nextFixture = new Map<string, { opp: string; home: boolean }>()
+  if (md < total - 1) for (const m of replay.matchdays[md + 1].matches) {
+    nextFixture.set(m.home, { opp: m.away, home: true })
+    nextFixture.set(m.away, { opp: m.home, home: false })
+  }
+
   return (
     <div className="flex flex-col gap-3 lg:h-[calc(100vh-9rem)]">
       {/* header / controls */}
@@ -59,21 +73,31 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
         {/* live table */}
         <Panel label="LIVE TABLE" className="flex min-h-0 flex-col p-3">
           <div className="mb-1 flex shrink-0 items-center gap-2 px-2 text-[10px] tracking-widest text-ink/40">
-            <span className="w-6" /><span className="flex-1">CLUB</span><span className="w-8 text-right">P</span><span className="w-9 text-right">GD</span><span className="w-8 text-right">PTS</span>
+            <span className="w-9" /><span className="flex-1">CLUB</span><span className="hidden w-28 text-right sm:inline">NEXT</span><span className="w-8 text-right">P</span><span className="w-9 text-right">GD</span><span className="w-8 text-right">PTS</span>
           </div>
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-            {day.table.map((r, i) => (
+            {day.table.map((r, i) => {
+              const prev = prevRank.get(r.team)
+              const delta = prev === undefined ? 0 : prev - i // >0 climbed, <0 dropped
+              const nf = nextFixture.get(r.team)
+              return (
               <motion.div
                 layout key={r.team} transition={{ type: 'spring', stiffness: 600, damping: 44 }}
                 className={`flex items-center gap-2 px-2 py-1 text-sm ${r.you ? 'border border-amber bg-amber/10 text-amber glow-amber' : 'border border-transparent text-ink/75'}`}
               >
-                <span className="w-6 text-right tabular-nums text-ink/50">{i + 1}</span>
+                <span className="flex w-9 items-center justify-end gap-0.5 tabular-nums text-ink/50">
+                  {i + 1}
+                  {delta > 0 && <span className="text-phosphor text-[10px]">▲</span>}
+                  {delta < 0 && <span className="text-danger text-[10px]">▼</span>}
+                </span>
                 <span className="flex-1 truncate font-bold">{r.team}</span>
+                <span className="hidden w-28 truncate text-right text-[10px] text-ink/35 sm:inline">{nf ? `${nf.home ? 'v' : '@'} ${shortClub(nf.opp)}` : '—'}</span>
                 <span className="w-8 text-right tabular-nums text-ink/45">{r.played}</span>
                 <span className="w-9 text-right tabular-nums">{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
                 <span className="w-8 text-right font-extrabold tabular-nums">{r.points}</span>
               </motion.div>
-            ))}
+              )
+            })}
           </div>
         </Panel>
 
@@ -95,7 +119,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
       </div>
 
       <div className="shrink-0 text-center text-[10px] text-ink/35">
-        SPACE play/pause · ◀ ▶ step matchday · F speed · S skip to results
+        SPACE play/pause · ◀ ▶ step matchday · F speed · S skip · ▲▼ vs last MD · NEXT = upcoming fixture
       </div>
     </div>
   )

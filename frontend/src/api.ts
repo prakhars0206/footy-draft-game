@@ -75,6 +75,7 @@ export interface DeclassifiedPlayer {
   line: LineName
   overall: number
   draftedByYou: boolean
+  eligible: boolean
 }
 export interface DraftResult {
   state: RunState

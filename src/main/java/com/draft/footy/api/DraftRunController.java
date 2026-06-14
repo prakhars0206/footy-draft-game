@@ -6,7 +6,11 @@ import com.draft.footy.persistence.DraftSlotEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The stateful draft flow (DESIGN_SPEC §3/§5B/§16). The client holds only the {@code runId} and drives the run
@@ -45,9 +49,9 @@ public class DraftRunController {
                                   RatingView rating, List<String> eligibleSlots) { }
     public record SpinView(String club, String season, String league, int strength, String tier,
                            int rerollsRemaining, List<SquadPlayerView> squad) { }
-    /** A drafted-from squad revealed after a pick (true ratings) — learn who you passed on. */
+    /** A drafted-from squad revealed after a pick (true ratings) — learn who you passed on. `eligible` = still fits an open slot. */
     public record DeclassifiedPlayer(int sofifaId, String name, String position, String line, int overall,
-                                     boolean draftedByYou) { }
+                                     boolean draftedByYou, boolean eligible) { }
     public record DraftResultView(RunStateView state, String club, String season, List<DeclassifiedPlayer> declassified) { }
     /** A player within a team-viewer XI; stats are null pre-sim (league preview), populated post-sim. */
     public record XiSlotView(String position, String line, String name, int overall,
@@ -132,13 +136,23 @@ public class DraftRunController {
             run.getRerollsRemaining(), run.openSlots().size(), strength(run), slots, spin);
     }
 
-    /** Reveal the drafted-from squad with TRUE (active) ratings — sorted strongest-first, your pick flagged. */
+    /** Reveal the drafted-from squad with TRUE (active) ratings — sorted strongest-first, your pick flagged,
+     *  players who no longer fit an open slot marked ineligible (the UI dims them). */
     private List<DeclassifiedPlayer> declassify(DraftRunService.DraftResult r) {
+        // Eligibility reflects what was pickable DURING selection: the still-open slots PLUS the slot you just
+        // filled (otherwise a backup at your new pick's position would wrongly grey out).
+        Set<String> open = r.run().openSlots().stream()
+            .map(DraftSlotEntity::getPosition).collect(Collectors.toSet());
+        r.run().getSlots().stream()
+            .filter(s -> Integer.valueOf(r.draftedId()).equals(s.getSofifaId()))
+            .findFirst().ifPresent(s -> open.add(s.getPosition()));
         List<DeclassifiedPlayer> out = new ArrayList<>();
         for (Player base : r.squad().roster) {
             Player a = service.active(r.run(), base);
+            boolean drafted = a.id() == r.draftedId();
+            boolean eligible = drafted || a.positions().stream().anyMatch(open::contains);
             out.add(new DeclassifiedPlayer(a.id(), a.name(), a.primaryPosition(),
-                a.primaryLine().name(), a.overall(), a.id() == r.draftedId()));
+                a.primaryLine().name(), a.overall(), drafted, eligible));
         }
         out.sort((x, y) -> Integer.compare(y.overall(), x.overall()));
         return out;
@@ -170,7 +184,12 @@ public class DraftRunController {
             rows.add(new SquadPlayerView(active.id(), active.name(), active.nation(), active.positions(),
                 rating(run, active.id(), active.overall()), eligible));
         }
-        rows.sort((a, b) -> Integer.compare(scoutOrExact(b), scoutOrExact(a))); // strongest first (band high in Scout)
+        // Eligible (can fill an open slot) first; within each group, OFF/blind mode shuffles deterministically so
+        // the row order never leaks who's strongest — otherwise sort strongest-first (band high in Scout).
+        boolean blind = run.getShowRatings() == ShowRatings.OFF;
+        rows.sort(Comparator
+            .comparing((SquadPlayerView v) -> v.eligibleSlots().isEmpty())
+            .thenComparingInt(v -> blind ? shuffleKey(run.getSeed(), v.sofifaId()) : -scoutOrExact(v)));
         int strength = squad.optimalStrength();
         return new SpinView(squad.club, squad.season, squad.league, strength, tierLabel(strength),
             run.getRerollsRemaining(), rows);
@@ -192,6 +211,11 @@ public class DraftRunController {
         if (v.rating().overall() != null) return v.rating().overall();
         if (v.rating().high() != null) return v.rating().high();
         return 0; // OFF mode — order is arbitrary
+    }
+
+    /** Stable per-(seed, player) pseudo-random key so OFF mode can shuffle a squad without leaking rating order. */
+    private static int shuffleKey(long seed, int sofifaId) {
+        return new Random(seed * 2654435761L + sofifaId).nextInt();
     }
 
     /**

@@ -198,12 +198,13 @@ function DeclassifiedPanel({
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
         {data.players.map((p) => {
           const lc = lineClasses[p.line]
+          const dim = !p.eligible && !p.draftedByYou // couldn't be picked into an open slot — greyed out
           return (
-            <div key={p.sofifaId} className={`flex items-center gap-2 border px-2 py-1 ${p.draftedByYou ? 'border-amber bg-amber/10' : 'border-edge'}`}>
+            <div key={p.sofifaId} className={`flex items-center gap-2 border px-2 py-1 ${p.draftedByYou ? 'border-amber bg-amber/10' : dim ? 'border-edge/50 opacity-40' : 'border-edge'}`}>
               <span className={`flex h-7 w-8 items-center justify-center border ${lc.border} ${lc.text} text-xs font-extrabold tabular-nums`}>{p.overall}</span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-bold text-ink-bright">{p.name}</div>
-                <div className={`text-[9px] font-bold ${lc.text}`}>{p.position}{p.draftedByYou ? ' · ★ YOURS' : ''}</div>
+                <div className={`text-[9px] font-bold ${lc.text}`}>{p.position}{p.draftedByYou ? ' · ★ YOURS' : dim ? ' · N·A' : ''}</div>
               </div>
             </div>
           )
