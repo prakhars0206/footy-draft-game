@@ -14,11 +14,11 @@ export function StrengthBars({ strength }: { strength: Strength | null }) {
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] tracking-mega text-ink/60">TEAM STRENGTH</span>
+        <span className="eyebrow text-ink/60">Team Strength</span>
         {hidden ? (
           <span className="redacted px-2 text-lg font-extrabold">00</span>
         ) : (
-          <span className="text-2xl font-extrabold tabular-nums text-ink-bright glow-phosphor">
+          <span className="font-display text-2xl font-semibold tabular-nums text-ink-bright">
             {strength.overall ?? '—'}
           </span>
         )}
@@ -27,8 +27,8 @@ export function StrengthBars({ strength }: { strength: Strength | null }) {
         const v = hidden ? null : (strength[row.key] as number | null)
         return (
           <div key={row.label} className="flex items-center gap-2">
-            <span className="w-8 text-[10px] tracking-widest text-ink/60">{row.label}</span>
-            <div className="relative h-2 flex-1 overflow-hidden border border-edge bg-black/40">
+            <span className="eyebrow w-8 text-ink/60">{row.label}</span>
+            <div className="relative h-2 flex-1 overflow-hidden bg-panel-2">
               {hidden ? (
                 <div className="redacted absolute inset-0" />
               ) : (

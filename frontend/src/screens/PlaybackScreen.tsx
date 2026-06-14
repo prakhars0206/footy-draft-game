@@ -55,8 +55,8 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
       {/* header / controls */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm tracking-mega text-ink/60">MATCHDAY <span className="text-amber glow-amber">{day.number}</span> / {total}</span>
-          <div className="h-1.5 w-40 overflow-hidden border border-edge bg-black/40">
+          <span className="font-display text-lg italic text-ink/70">Matchday <span className="font-semibold not-italic text-amber">{day.number}</span> of {total}</span>
+          <div className="h-1 w-40 overflow-hidden bg-panel-2">
             <div className="h-full bg-amber transition-all" style={{ width: `${((md + 1) / total) * 100}%` }} />
           </div>
         </div>
@@ -71,7 +71,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_minmax(360px,440px)]">
         {/* live table */}
-        <Panel label="LIVE TABLE" className="flex min-h-0 flex-col p-3">
+        <Panel label="The Table · live" className="flex min-h-0 flex-col p-4">
           <div className="mb-1 flex shrink-0 items-center gap-2 px-2 text-[10px] tracking-widest text-ink/40">
             <span className="w-9" /><span className="flex-1">CLUB</span><span className="hidden w-28 text-right sm:inline">NEXT</span><span className="w-8 text-right">P</span><span className="w-9 text-right">GD</span><span className="w-8 text-right">PTS</span>
           </div>
@@ -83,7 +83,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
               return (
               <motion.div
                 layout key={r.team} transition={{ type: 'spring', stiffness: 600, damping: 44 }}
-                className={`flex items-center gap-2 px-2 py-1 text-sm ${r.you ? 'border border-amber bg-amber/10 text-amber glow-amber' : 'border border-transparent text-ink/75'}`}
+                className={`flex items-center gap-2 px-2 py-1 text-sm ${r.you ? 'border border-amber/60 bg-amber/10 text-amber' : 'border border-transparent text-ink/75'}`}
               >
                 <span className="flex w-9 items-center justify-end gap-0.5 tabular-nums text-ink/50">
                   {i + 1}
@@ -94,7 +94,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
                 <span className="hidden w-28 truncate text-right text-[10px] text-ink/35 sm:inline">{nf ? `${nf.home ? 'v' : '@'} ${shortClub(nf.opp)}` : '—'}</span>
                 <span className="w-8 text-right tabular-nums text-ink/45">{r.played}</span>
                 <span className="w-9 text-right tabular-nums">{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
-                <span className="w-8 text-right font-extrabold tabular-nums">{r.points}</span>
+                <span className="w-8 text-right font-bold tabular-nums">{r.points}</span>
               </motion.div>
               )
             })}
@@ -102,7 +102,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
         </Panel>
 
         {/* matchday results */}
-        <Panel label={`MATCHDAY ${day.number} RESULTS`} className="flex min-h-0 flex-col p-3">
+        <Panel label={`Matchday ${day.number} · results`} className="flex min-h-0 flex-col p-4">
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {matches.map((m, i) => <MatchCard key={i} m={m} />)}
           </div>
@@ -110,9 +110,9 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
             <motion.button
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               onClick={onFinish}
-              className="mt-3 w-full shrink-0 border-2 border-phosphor bg-phosphor/10 py-3 text-sm font-extrabold tracking-[0.3em] text-phosphor glow-phosphor"
+              className="mt-3 w-full shrink-0 bg-amber py-3 text-sm font-bold uppercase tracking-[0.18em] text-terminal transition hover:bg-ink-bright"
             >
-              ▸ VIEW DEBRIEF
+              Read the Debrief
             </motion.button>
           )}
         </Panel>
@@ -130,12 +130,12 @@ function MatchCard({ m }: { m: MatchResult }) {
   const homeGoals = m.goals.filter((g) => g.home)
   const awayGoals = m.goals.filter((g) => !g.home)
   return (
-    <div className={`border p-2 ${m.userMatch ? 'border-amber bg-amber/10' : 'border-edge'}`}>
-      {m.userMatch && <div className="mb-1 text-center"><Stamp text="YOUR MATCH" tone="amber" /></div>}
+    <div className={`border p-2 ${m.userMatch ? 'border-amber/60 bg-amber/10' : 'border-edge'}`}>
+      {m.userMatch && <div className="mb-1 text-center"><Stamp text="Your Match" tone="amber" /></div>}
       <div className="flex items-center gap-2 text-sm">
-        <span className="flex-1 truncate text-right font-bold text-ink-bright">{m.home}</span>
-        <span className="border border-edge px-2 font-extrabold tabular-nums text-amber">{m.homeGoals}–{m.awayGoals}</span>
-        <span className="flex-1 truncate font-bold text-ink-bright">{m.away}</span>
+        <span className="flex-1 truncate text-right font-semibold text-ink-bright">{m.home}</span>
+        <span className="bg-panel-2 px-2 font-bold tabular-nums text-amber">{m.homeGoals}–{m.awayGoals}</span>
+        <span className="flex-1 truncate font-semibold text-ink-bright">{m.away}</span>
       </div>
       {m.goals.length > 0 && (
         <div className="mt-1 flex justify-between gap-2 text-[10px] text-ink/50">
@@ -152,7 +152,7 @@ function Ctrl({ onClick, label, wide, active }: { onClick: () => void; label: st
   return (
     <button
       onClick={onClick}
-      className={`border px-2 py-1.5 font-bold tracking-wide ${wide ? 'px-3' : ''} ${active ? 'border-phosphor text-phosphor glow-phosphor' : 'border-edge text-ink/70 hover:border-amber hover:text-amber'}`}
+      className={`border px-2 py-1.5 font-semibold tracking-wide transition ${wide ? 'px-3' : ''} ${active ? 'border-amber bg-amber/10 text-amber' : 'border-edge text-ink/70 hover:border-amber hover:text-amber'}`}
     >
       {label}
     </button>

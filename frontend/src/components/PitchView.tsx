@@ -23,13 +23,13 @@ export function PitchView({
 }) {
   const coords = PITCH[formation] ?? PITCH['4-3-3']
   return (
-    <div className="relative mx-auto aspect-[7/10] h-full max-h-full overflow-hidden border border-edge bg-gradient-to-b from-[#0b1a12] to-[#06100b]">
-      {/* pitch markings */}
-      <div className="pointer-events-none absolute inset-0 opacity-30">
-        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-mid/30" />
-        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-mid/30" />
-        <div className="absolute left-1/2 top-0 h-16 w-32 -translate-x-1/2 border-x border-b border-mid/25" />
-        <div className="absolute bottom-0 left-1/2 h-16 w-32 -translate-x-1/2 border-x border-t border-mid/25" />
+    <div className="relative mx-auto aspect-[7/10] h-full max-h-full overflow-hidden border border-edge bg-gradient-to-b from-[#1a1d16] to-[#12120d]">
+      {/* chalk pitch markings */}
+      <div className="pointer-events-none absolute inset-0 opacity-50">
+        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-ink/15" />
+        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink/15" />
+        <div className="absolute left-1/2 top-0 h-16 w-32 -translate-x-1/2 border-x border-b border-ink/12" />
+        <div className="absolute bottom-0 left-1/2 h-16 w-32 -translate-x-1/2 border-x border-t border-ink/12" />
       </div>
 
       {slots.map((slot) => {
@@ -54,7 +54,7 @@ export function PitchView({
                 className={`flex w-14 flex-col items-center ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <span
-                  className={`flex h-8 w-8 items-center justify-center border ${lc.border} ${lc.glow} bg-black/70 text-[10px] font-extrabold ${lc.text} ${isSelected ? 'ring-2 ring-amber' : ''}`}
+                  className={`flex h-8 w-8 items-center justify-center border ${lc.border} ${lc.glow} bg-terminal/85 text-[10px] font-bold ${lc.text} ${isSelected ? 'ring-2 ring-amber' : ''}`}
                 >
                   {code(slot.name ?? '')}
                 </span>

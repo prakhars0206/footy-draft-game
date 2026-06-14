@@ -100,13 +100,13 @@ export function DraftScreen({
 
   return (
     <div className="flex flex-col gap-3 lg:h-[calc(100vh-9rem)]">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 text-xs">
-        <span className="tracking-mega text-ink/60">
-          TARGETS <span className="text-amber glow-amber">{run.slotsRemaining}</span>/11
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <span className="eyebrow text-ink/60">
+          XI to fill <span className="text-amber">{run.slotsRemaining}</span> / 11
         </span>
         <StrengthStrip s={run.strength} />
-        <span className="tracking-mega text-ink/60">
-          REROLLS <span className="text-phosphor">{run.rerollsRemaining}/{difficultyRerolls(run.difficulty)}</span>
+        <span className="eyebrow text-ink/60">
+          Rerolls <span className="text-phosphor">{run.rerollsRemaining} / {difficultyRerolls(run.difficulty)}</span>
         </span>
       </div>
 
@@ -126,15 +126,15 @@ export function DraftScreen({
           ) : complete ? (
             <LeaguePanel preview={preview} busy={busy} onInspect={setInspect} onRun={() => guard(async () => onSimulated(await api.simulate(run.runId)))} />
           ) : !spin ? (
-            <Panel label="ACQUISITION" className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-              <Prompt>spin to acquire a target squad</Prompt>
+            <Panel label="The Spin" className="flex flex-1 flex-col items-center justify-center gap-5 p-8">
+              <Prompt>spin to draw a club, then draft from its squad</Prompt>
               <motion.button
                 whileHover={{ scale: busy ? 1 : 1.03 }} whileTap={{ scale: busy ? 1 : 0.97 }}
                 disabled={busy} onClick={doSpin}
-                className="relative h-40 w-40 border-2 border-phosphor bg-phosphor/5 font-extrabold tracking-[0.2em] text-phosphor glow-phosphor disabled:opacity-30"
+                className="relative flex h-40 w-40 items-center justify-center rounded-full border border-amber/50 bg-amber/5 font-display text-lg italic text-amber transition hover:bg-amber/10 disabled:opacity-30"
               >
-                {scanning ? <span className="caret text-sm">SCANNING</span> : <span className="text-sm">◎ SPIN</span>}
-                <span className="absolute inset-2 border border-phosphor/30" />
+                {scanning ? <span className="text-base not-italic tracking-[0.2em]">scanning…</span> : <span>Spin</span>}
+                <span className="absolute inset-2.5 rounded-full border border-amber/20" />
               </motion.button>
             </Panel>
           ) : revealing ? (
@@ -148,10 +148,10 @@ export function DraftScreen({
           )}
           {error && <div className="mt-2 shrink-0 border border-danger/50 bg-danger/10 p-2 text-sm text-danger">! {error}</div>}
           {!complete && !declassified && !revealing && (
-            <div className="mt-2 shrink-0 text-[10px] text-ink/40">
-              {moveFrom != null ? '> select a highlighted slot to reposition · click the player again to cancel'
-                : selected ? '> select a highlighted pitch slot, or use DEPLOY below'
-                  : '> click a deployed player on the pitch to reposition them'}
+            <div className="mt-2 shrink-0 font-display text-[12px] italic text-ink/40">
+              {moveFrom != null ? '— select a highlighted slot to reposition · click the player again to cancel'
+                : selected ? '— select a highlighted pitch slot, or use Deploy below'
+                  : '— click a deployed player on the pitch to reposition them'}
             </div>
           )}
         </div>
@@ -160,12 +160,12 @@ export function DraftScreen({
       <AnimatePresence>
         {inspect && (
           <Backdrop onClose={() => setInspect(null)}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-extrabold text-ink-bright">{inspect.team}</div>
-              <span className={`border px-2 py-0.5 text-[10px] ${TIER_COLOR[inspect.tier] ?? 'text-ink border-edge'}`}>{inspect.tier} · {inspect.strength}</span>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="truncate font-display text-lg font-semibold text-ink-bright">{inspect.team}</div>
+              <span className={`shrink-0 border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${TIER_COLOR[inspect.tier] ?? 'text-ink border-edge'}`}>{inspect.tier} · {inspect.strength}</span>
             </div>
             <TeamPitch formation={inspect.formation} players={inspect.xi} />
-            <button onClick={() => setInspect(null)} className="mt-4 w-full border border-edge py-2 text-sm font-bold tracking-widest text-ink/70 hover:border-amber hover:text-amber">CLOSE</button>
+            <button onClick={() => setInspect(null)} className="mt-4 w-full border border-edge py-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70 hover:border-amber hover:text-amber">Close</button>
           </Backdrop>
         )}
       </AnimatePresence>
@@ -179,7 +179,7 @@ function StrengthStrip({ s }: { s: Strength | null }) {
   )
   return (
     <div className="flex items-center gap-2.5 border border-edge px-2.5 py-1 text-[11px] sm:gap-3">
-      <span className="flex items-center gap-1"><span className="text-ink/35">OVR</span><span className="font-extrabold tabular-nums text-ink-bright glow-phosphor">{s?.overall ?? '—'}</span></span>
+      <span className="flex items-center gap-1"><span className="text-ink/35">OVR</span><span className="font-bold tabular-nums text-ink-bright">{s?.overall ?? '—'}</span></span>
       <Cell label="ATT" v={s?.attack} cls="text-att" />
       <Cell label="MID" v={s?.midfield} cls="text-mid" />
       <Cell label="DEF" v={s?.defence} cls="text-def" />
@@ -194,29 +194,28 @@ function DeclassifiedPanel({
   data: { club: string; season: string; players: DeclassifiedPlayer[] }; complete: boolean; busy: boolean; onNext: () => void
 }) {
   return (
-    <Panel label="SQUAD DECLASSIFIED" accent="amber" className="flex min-h-0 flex-1 flex-col p-3">
-      <div className="mb-2 shrink-0">
-        <div className="flex items-center gap-2"><Stamp text="DECLASSIFIED" tone="amber" /></div>
-        <div className="mt-1 text-sm font-bold text-ink-bright">{data.club} · {data.season}</div>
-        <div className="text-[10px] text-ink/40">who you passed on ▸</div>
+    <Panel label="Squad Declassified" accent="amber" className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="mb-3 shrink-0">
+        <div className="font-display text-lg font-semibold text-ink-bright">{data.club}</div>
+        <div className="text-[11px] text-ink/45">{data.season} · who you passed on</div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
         {data.players.map((p) => {
           const lc = lineClasses[p.line]
           const dim = !p.eligible && !p.draftedByYou // couldn't be picked into an open slot — greyed out
           return (
-            <div key={p.sofifaId} className={`flex items-center gap-2 border px-2 py-1 ${p.draftedByYou ? 'border-amber bg-amber/10' : dim ? 'border-edge/50 opacity-40' : 'border-edge'}`}>
-              <span className={`flex h-7 w-8 items-center justify-center border ${lc.border} ${lc.text} text-xs font-extrabold tabular-nums`}>{p.overall}</span>
+            <div key={p.sofifaId} className={`flex items-center gap-2 border px-2 py-1 ${p.draftedByYou ? 'border-amber/60 bg-amber/10' : dim ? 'border-edge/50 opacity-40' : 'border-edge'}`}>
+              <span className={`flex h-7 w-8 items-center justify-center border ${lc.border} ${lc.text} text-xs font-bold tabular-nums`}>{p.overall}</span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-bold text-ink-bright">{p.name}</div>
-                <div className={`text-[9px] font-bold ${lc.text}`}>{p.position}{p.draftedByYou ? ' · ★ YOURS' : dim ? ' · N·A' : ''}</div>
+                <div className="truncate text-xs font-semibold text-ink-bright">{p.name}</div>
+                <div className={`text-[9px] font-semibold ${lc.text}`}>{p.position}{p.draftedByYou ? ' · ★ yours' : dim ? ' · n/a' : ''}</div>
               </div>
             </div>
           )
         })}
       </div>
-      <button disabled={busy} onClick={onNext} className="mt-3 w-full shrink-0 border-2 border-phosphor bg-phosphor/10 py-3 text-sm font-extrabold tracking-[0.3em] text-phosphor glow-phosphor disabled:opacity-50">
-        {complete ? 'VIEW LEAGUE ▸' : 'NEXT TARGET ▸'}
+      <button disabled={busy} onClick={onNext} className="mt-3 w-full shrink-0 bg-amber py-3 text-sm font-bold uppercase tracking-[0.18em] text-terminal transition hover:bg-ink-bright disabled:opacity-50">
+        {complete ? 'View the League' : 'Next Spin'}
       </button>
     </Panel>
   )
@@ -225,47 +224,47 @@ function DeclassifiedPanel({
 function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | null; busy: boolean; onRun: () => void; onInspect: (t: LeagueTeam) => void }) {
   const p = preview?.projection
   return (
-    <Panel label="THE LEAGUE · PRE-SEASON" accent="amber" className="flex min-h-0 flex-1 flex-col p-4">
+    <Panel label="The League · pre-season" accent="amber" className="flex min-h-0 flex-1 flex-col p-4">
       <div className="shrink-0">
         <div className="flex items-end justify-between">
           <div>
-            <div className="text-[10px] tracking-mega text-ink/50">PROJECTED FINISH</div>
-            <div className="text-4xl font-extrabold text-amber glow-amber tabular-nums">
+            <div className="eyebrow text-ink/50">Projected Finish</div>
+            <div className="font-display text-5xl font-black leading-none text-amber">
               {preview ? ordinal(preview.userProjectedPos) : '—'}
-              <span className="text-sm text-ink/50"> · {p?.expectedPoints ?? '—'} pts</span>
+              <span className="ml-1 font-sans text-sm font-normal not-italic text-ink/50">· {p?.expectedPoints ?? '—'} pts</span>
             </div>
           </div>
           <div className="text-right text-[10px] text-ink/50">
-            YOUR OVR <span className="text-ink-bright">{preview?.userOverall ?? '—'}</span><br />
-            LEAGUE MEAN <span className="text-ink-bright">{preview?.leagueMean ?? '—'}</span>
+            <span className="eyebrow">Your OVR</span> <span className="text-ink-bright">{preview?.userOverall ?? '—'}</span><br />
+            <span className="eyebrow">League Mean</span> <span className="text-ink-bright">{preview?.leagueMean ?? '—'}</span>
           </div>
         </div>
-        <div className="mt-3 space-y-1.5">
-          <OddsRow label="WIN LEAGUE" v={p?.winLeague ?? 0} />
-          <OddsRow label="TOP 4" v={p?.top4 ?? 0} />
-          <OddsRow label="RELEGATION" v={p?.relegation ?? 0} />
+        <div className="mt-4 space-y-1.5">
+          <OddsRow label="Win League" v={p?.winLeague ?? 0} />
+          <OddsRow label="Top 4" v={p?.top4 ?? 0} />
+          <OddsRow label="Relegation" v={p?.relegation ?? 0} />
         </div>
-        <div className="mt-3 mb-1 flex items-center gap-2 text-[10px] tracking-mega text-ink/50">
-          <span className="w-5 text-right">#</span><span className="flex-1">OPPONENTS · tap to scout</span><span className="w-11 text-right">PROJ</span><span className="w-7 text-right">OVR</span>
+        <div className="mt-4 mb-1 flex items-center gap-2 border-b border-edge pb-1">
+          <span className="eyebrow w-5 text-right text-ink/45">#</span><span className="eyebrow flex-1 text-ink/45">Opponents · tap to scout</span><span className="eyebrow w-11 text-right text-ink/45">Proj</span><span className="eyebrow w-7 text-right text-ink/45">OVR</span>
         </div>
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {(preview?.league ?? []).map((t, i) => (
-          <button key={i} onClick={() => onInspect(t)} className="flex w-full items-center gap-2 border border-edge px-2 py-1 text-left text-sm hover:border-edge-bright">
+          <button key={i} onClick={() => onInspect(t)} className="flex w-full items-center gap-2 border border-transparent px-2 py-1 text-left text-sm hover:border-edge-bright">
             <span className="w-5 text-right tabular-nums text-ink/40">{t.projectedPos}</span>
             <span className="flex-1 truncate text-ink-bright">{t.team}</span>
-            <span className={`border px-1 text-[9px] ${TIER_COLOR[t.tier] ?? 'text-ink border-edge'}`}>{t.tier}</span>
+            <span className={`border px-1 text-[9px] uppercase tracking-[0.12em] ${TIER_COLOR[t.tier] ?? 'text-ink border-edge'}`}>{t.tier}</span>
             <span className="w-11 text-right text-[11px] tabular-nums text-ink/55">{t.projectedPoints} pt</span>
-            <span className="w-7 text-right font-extrabold tabular-nums text-amber">{t.strength}</span>
+            <span className="w-7 text-right font-bold tabular-nums text-amber">{t.strength}</span>
           </button>
         ))}
-        {!preview && <div className="caret p-4 text-center text-sm text-ink/50">compiling league dossier</div>}
+        {!preview && <div className="p-4 text-center font-display text-sm italic text-ink/50">compiling the league dossier…</div>}
       </div>
       <motion.button
         whileHover={{ scale: busy ? 1 : 1.02 }} whileTap={{ scale: busy ? 1 : 0.98 }} disabled={busy || !preview} onClick={onRun}
-        className="mt-3 w-full shrink-0 border-2 border-phosphor bg-phosphor/10 py-3.5 text-base font-extrabold tracking-[0.3em] text-phosphor glow-phosphor disabled:opacity-50"
+        className="mt-3 w-full shrink-0 bg-amber py-3.5 text-base font-bold uppercase tracking-[0.18em] text-terminal transition hover:bg-ink-bright disabled:opacity-50"
       >
-        {busy ? 'SIMULATING…' : '▸ RUN SEASON'}
+        {busy ? 'Playing the season…' : 'Play the Season'}
       </motion.button>
     </Panel>
   )
@@ -275,8 +274,8 @@ function OddsRow({ label, v }: { label: string; v: number }) {
   const pct = Math.round(v * 100)
   return (
     <div className="flex items-center gap-2">
-      <span className="w-24 text-[10px] tracking-widest text-ink/55">{label}</span>
-      <div className="h-2 flex-1 overflow-hidden border border-edge bg-black/40">
+      <span className="eyebrow w-24 text-ink/55">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden bg-panel-2">
         <motion.div className="h-full bg-amber" initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6 }} />
       </div>
       <span className="w-8 text-right text-xs tabular-nums text-amber">{pct}%</span>
@@ -291,13 +290,13 @@ function SquadPanel({
   onSelect: (p: SquadPlayer) => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
 }) {
   return (
-    <Panel label="SPUN SQUAD" className="flex min-h-0 flex-1 flex-col p-3">
-      <div className="mb-2 flex shrink-0 items-center justify-between">
-        <div>
-          <div className="text-sm font-extrabold tracking-wide text-ink-bright">{spin.club}</div>
+    <Panel label="The Spun Squad" className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-display text-lg font-semibold text-ink-bright">{spin.club}</div>
           <div className="text-[11px] text-ink/50">{spin.season}{spin.league ? ` · ${spin.league}` : ''}</div>
         </div>
-        <button disabled={busy || !canReroll} onClick={onReroll} className="border border-edge px-3 py-1.5 text-xs font-bold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ REROLL</button>
+        <button disabled={busy || !canReroll} onClick={onReroll} className="shrink-0 border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
         {spin.squad.map((p, i) => {
@@ -307,14 +306,14 @@ function SquadPanel({
             <motion.div key={p.sofifaId} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(i * 0.02, 0.3) }}>
               <button
                 disabled={!eligible || busy} onClick={() => onSelect(p)}
-                className={`flex h-full w-full items-start gap-2 border p-1.5 text-left transition ${isSel ? 'border-amber bg-amber/10' : eligible ? 'border-edge hover:border-edge-bright' : 'border-edge/50 opacity-40'}`}
+                className={`flex h-full w-full items-start gap-2 border p-1.5 text-left transition ${isSel ? 'border-amber/60 bg-amber/10' : eligible ? 'border-edge hover:border-edge-bright' : 'border-edge/50 opacity-40'}`}
               >
                 <RatingBadge rating={p.rating} line={lineOf(p.positions[0] ?? 'CM')} size="md" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold text-ink-bright">{p.name}</div>
+                  <div className="truncate text-sm font-semibold text-ink-bright">{p.name}</div>
                   <div className="truncate text-[9px] text-ink/45">{p.nation}</div>
                   <div className="mt-0.5 flex flex-wrap gap-0.5">{p.positions.slice(0, 4).map((pos) => <PositionChip key={pos} position={pos} />)}</div>
-                  <div className="mt-0.5 text-[9px] text-phosphor">{eligible ? `FITS ${p.eligibleSlots.length}` : 'N·A'}</div>
+                  <div className="mt-0.5 text-[9px] text-phosphor">{eligible ? `fits ${p.eligibleSlots.length}` : 'n/a'}</div>
                 </div>
               </button>
             </motion.div>
@@ -324,12 +323,12 @@ function SquadPanel({
       <AnimatePresence>
         {selected && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="shrink-0 overflow-hidden">
-            <div className="mt-2 border-t border-edge pt-2">
-              <div className="mb-2 flex items-center gap-2 text-xs"><Stamp text="PLACE" tone="phosphor" /><span className="font-bold text-ink-bright">{selected.name}</span></div>
+            <div className="mt-2 border-t border-edge pt-3">
+              <div className="mb-2 flex items-center gap-2 text-xs"><Stamp text="Place" tone="phosphor" /><span className="font-semibold text-ink-bright">{selected.name}</span></div>
               <div className="flex flex-wrap gap-2">
                 {selected.eligibleSlots.map((pos) => {
                   const lc = lineClasses[lineOf(pos)]
-                  return <button key={pos} disabled={busy} onClick={() => onDraft(selected, pos)} className={`border ${lc.border} ${lc.text} ${lc.glow} px-3 py-1.5 text-sm font-bold disabled:opacity-40`}>DEPLOY ▸ {pos}</button>
+                  return <button key={pos} disabled={busy} onClick={() => onDraft(selected, pos)} className={`border ${lc.border} ${lc.text} px-3 py-1.5 text-sm font-semibold transition hover:bg-panel-2 disabled:opacity-40`}>Deploy → {pos}</button>
                 })}
               </div>
             </div>
@@ -342,8 +341,8 @@ function SquadPanel({
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="w-full max-w-lg border-2 border-edge-bright bg-panel p-5" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
+    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-terminal/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="w-full max-w-lg border border-edge-bright bg-panel p-6" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
         {children}
       </motion.div>
     </motion.div>

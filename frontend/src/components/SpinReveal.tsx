@@ -9,13 +9,13 @@ const FLICKER = [
   'Benfica', 'Dortmund', 'Inter', 'Milan', 'Arsenal', 'Chelsea', 'Porto', 'Lazio', 'Monaco', 'Leeds',
 ]
 
-type Style = { text: string; border: string; glow: string; banner: string; tone: 'amber' | 'phosphor' | 'danger'; epic: boolean }
+type Style = { text: string; border: string; banner: string; tone: 'amber' | 'phosphor' | 'danger'; epic: boolean }
 const TIER_STYLE: Record<string, Style> = {
-  JUGGERNAUT: { text: 'text-amber', border: 'border-amber', glow: 'glow-amber', banner: '◆ JUGGERNAUT ◆', tone: 'amber', epic: true },
-  'TITLE CONTENDER': { text: 'text-phosphor', border: 'border-phosphor', glow: 'glow-phosphor', banner: 'TITLE CONTENDER', tone: 'phosphor', epic: true },
-  'EUROPEAN CHASER': { text: 'text-def', border: 'border-def', glow: '', banner: 'EUROPEAN CHASER', tone: 'phosphor', epic: false },
-  'MID-TABLE': { text: 'text-ink-bright', border: 'border-edge-bright', glow: '', banner: 'MID-TABLE', tone: 'amber', epic: false },
-  'RELEGATION SCRAPPER': { text: 'text-danger', border: 'border-danger', glow: '', banner: 'RELEGATION SCRAPPER', tone: 'danger', epic: false },
+  JUGGERNAUT: { text: 'text-amber', border: 'border-amber', banner: 'Juggernaut', tone: 'amber', epic: true },
+  'TITLE CONTENDER': { text: 'text-phosphor', border: 'border-phosphor', banner: 'Title Contender', tone: 'phosphor', epic: true },
+  'EUROPEAN CHASER': { text: 'text-def', border: 'border-def', banner: 'European Chaser', tone: 'phosphor', epic: false },
+  'MID-TABLE': { text: 'text-ink-bright', border: 'border-edge-bright', banner: 'Mid-Table', tone: 'amber', epic: false },
+  'RELEGATION SCRAPPER': { text: 'text-danger', border: 'border-danger', banner: 'Relegation Scrapper', tone: 'danger', epic: false },
 }
 
 export function SpinReveal({ spin, onAccess }: { spin: SpinView; onAccess: () => void }) {
@@ -33,14 +33,14 @@ export function SpinReveal({ spin, onAccess }: { spin: SpinView; onAccess: () =>
   return (
     <Panel
       accent={accent}
-      className={`flex min-h-0 flex-1 flex-col items-center justify-center p-6 text-center ${st.epic && phase === 'reveal' ? st.glow : ''}`}
+      className="flex min-h-0 flex-1 flex-col items-center justify-center p-6 text-center"
     >
       {phase === 'scan' ? (
         <>
-          <div className="caret text-xs tracking-mega text-ink/50">ACQUIRING TARGET</div>
-          <div className="mt-4 text-2xl font-extrabold text-ink/40">{flick}…</div>
-          <div className="mt-6 h-1.5 w-52 overflow-hidden border border-edge bg-black/40">
-            <motion.div className="h-full w-1/3 bg-phosphor" animate={{ x: ['-120%', '360%'] }} transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }} />
+          <div className="eyebrow text-ink/50">Drawing your club</div>
+          <div className="mt-4 font-display text-3xl italic text-ink/35">{flick}…</div>
+          <div className="mt-6 h-1 w-52 overflow-hidden bg-panel-2">
+            <motion.div className="h-full w-1/3 bg-amber" animate={{ x: ['-120%', '360%'] }} transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }} />
           </div>
         </>
       ) : (
@@ -52,24 +52,24 @@ export function SpinReveal({ spin, onAccess }: { spin: SpinView; onAccess: () =>
         >
           <Stamp text={st.banner} tone={st.tone} className="mb-3" />
           <motion.div
-            className={`text-3xl font-extrabold ${st.text} ${st.glow}`}
-            animate={st.epic ? { scale: [1, 1.04, 1] } : {}}
-            transition={{ repeat: Infinity, duration: 1.6 }}
+            className={`font-display text-4xl font-black leading-none ${st.text}`}
+            animate={st.epic ? { scale: [1, 1.03, 1] } : {}}
+            transition={{ repeat: Infinity, duration: 1.8 }}
           >
             {spin.club}
           </motion.div>
-          <div className="mt-1 text-sm text-ink/60">{spin.season}{spin.league ? ` · ${spin.league}` : ''}</div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-[10px] tracking-mega text-ink/50">SQUAD RATING</span>
-            <span className={`text-2xl font-extrabold tabular-nums ${st.text}`}>{spin.strength}</span>
+          <div className="mt-2 font-display text-sm italic text-ink/60">{spin.season}{spin.league ? ` · ${spin.league}` : ''}</div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="eyebrow text-ink/50">Squad Rating</span>
+            <span className={`font-display text-3xl font-semibold tabular-nums ${st.text}`}>{spin.strength}</span>
           </div>
-          {st.epic && <div className={`mt-2 text-[10px] tracking-mega ${st.text}`}>★ ELITE SQUAD ACQUIRED ★</div>}
+          {st.epic && <div className={`mt-2 font-display text-[13px] italic ${st.text}`}>an elite squad lands</div>}
           <motion.button
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
             onClick={onAccess}
-            className={`mt-6 border-2 ${st.border} ${st.text} ${st.glow} px-6 py-2.5 text-sm font-extrabold tracking-[0.3em]`}
+            className={`mt-6 border ${st.border} ${st.text} px-6 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] transition hover:bg-panel-2`}
           >
-            ▸ ACCESS SQUAD
+            Access Squad →
           </motion.button>
         </motion.div>
       )}

@@ -16,7 +16,7 @@ export default function App() {
   const [season, setSeason] = useState<SeasonView | null>(null)
 
   return (
-    <div className="scanlines crt min-h-screen bg-terminal text-ink">
+    <div className="min-h-screen bg-terminal text-ink">
       <div className="mx-auto max-w-6xl px-4 py-6">
         <Header />
         <AnimatePresence mode="wait">
@@ -74,16 +74,20 @@ export default function App() {
 
 function Header() {
   return (
-    <header className="mb-6 flex items-center justify-between border-b border-edge pb-3">
-      <div className="flex items-center gap-3">
-        <span className="h-3 w-3 animate-pulse bg-phosphor" />
-        <h1 className="text-lg font-extrabold tracking-[0.3em] text-ink-bright glow-phosphor">
-          SCOUT<span className="text-amber">//</span>DRAFT
-        </h1>
+    <header className="mb-7">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow text-ink/45">The Season Almanac · Est. 2026</div>
+          <h1 className="font-display text-3xl font-black leading-none tracking-tight text-ink-bright sm:text-4xl">
+            Footy <span className="text-amber">Draft</span>
+          </h1>
+        </div>
+        <div className="hidden text-right sm:block">
+          <div className="font-display text-sm italic text-ink/60">spin · draft · chase the invincible</div>
+          <div className="eyebrow mt-1 text-ink/40">Vol. I — No. 1</div>
+        </div>
       </div>
-      <span className="hidden text-[10px] tracking-mega text-ink/50 sm:block">
-        CLASSIFIED · FIELD TERMINAL v2
-      </span>
+      <div className="mt-3 border-t-2 border-double border-edge-bright" />
     </header>
   )
 }

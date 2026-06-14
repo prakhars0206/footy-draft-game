@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-/** A bordered terminal panel with optional header label and decorative corner ticks. */
+/** An editorial "leaf": a quiet card with a small-caps eyebrow header above a hairline rule. */
 export function Panel({
   children,
   label,
@@ -12,14 +12,14 @@ export function Panel({
   className?: string
   accent?: 'edge' | 'amber' | 'phosphor'
 }) {
-  const border =
-    accent === 'amber' ? 'border-amber/40' : accent === 'phosphor' ? 'border-phosphor/40' : 'border-edge'
+  const accentText =
+    accent === 'amber' ? 'text-amber' : accent === 'phosphor' ? 'text-phosphor' : 'text-ink/70'
   return (
-    <div className={`relative border ${border} bg-panel/70 ${className}`}>
-      <Ticks />
+    <div className={`relative border border-edge bg-panel/50 ${className}`}>
       {label && (
-        <div className="absolute -top-2 left-3 bg-terminal px-2 text-[10px] tracking-mega text-ink/70">
-          {label}
+        <div className="mb-3 flex items-center gap-3 border-b border-edge pb-2">
+          <span className={`eyebrow ${accentText}`}>{label}</span>
+          <span className="h-px flex-1 bg-edge" />
         </div>
       )}
       {children}
@@ -27,19 +27,7 @@ export function Panel({
   )
 }
 
-function Ticks() {
-  const c = 'absolute h-2 w-2 border-edge-bright'
-  return (
-    <>
-      <span className={`${c} left-0 top-0 border-l border-t`} />
-      <span className={`${c} right-0 top-0 border-r border-t`} />
-      <span className={`${c} bottom-0 left-0 border-b border-l`} />
-      <span className={`${c} bottom-0 right-0 border-b border-r`} />
-    </>
-  )
-}
-
-/** A rotated rubber-stamp label (CLASSIFIED / SCOUTED / OVERPERFORMED …). */
+/** A set-in small-caps tag (CLASSIFIED / SCOUTED / OVERPERFORMED …) — boxed, no rotation. */
 export function Stamp({
   text,
   tone = 'amber',
@@ -50,24 +38,24 @@ export function Stamp({
   className?: string
 }) {
   const tones = {
-    amber: 'text-amber border-amber',
-    phosphor: 'text-phosphor border-phosphor',
-    danger: 'text-danger border-danger',
+    amber: 'text-amber border-amber/50',
+    phosphor: 'text-phosphor border-phosphor/50',
+    danger: 'text-danger border-danger/50',
   }
   return (
     <span
-      className={`inline-block -rotate-6 border-2 ${tones[tone]} px-2 py-0.5 text-xs font-extrabold tracking-[0.2em] opacity-90 ${className}`}
+      className={`inline-block border ${tones[tone]} px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${className}`}
     >
       {text}
     </span>
   )
 }
 
-/** A blinking-caret prompt line, e.g. "> acquire target". */
+/** A refined lead-in line, e.g. "— acquire target". No blinking caret. */
 export function Prompt({ children }: { children: ReactNode }) {
   return (
-    <div className="caret text-sm text-phosphor/80">
-      <span className="text-ink/50">&gt;</span> {children}
+    <div className="font-display text-[15px] italic text-ink/75">
+      <span className="not-italic text-amber">—</span> {children}
     </div>
   )
 }

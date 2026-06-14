@@ -43,10 +43,11 @@ export function SetupScreen({ onCreated }: { onCreated: (run: RunState) => void 
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <Panel label="MISSION CONFIG" className="p-5">
-        <Prompt>configure scouting parameters, then initiate the draft</Prompt>
+      <Panel label="Draft Configuration" className="p-6">
+        <h2 className="font-display text-2xl font-semibold text-ink-bright">Set your terms</h2>
+        <div className="mt-1"><Prompt>choose your shape and intel, then begin the draft</Prompt></div>
 
-        <div className="mt-5 space-y-5">
+        <div className="mt-6 space-y-5">
           <Field label="FORMATION">
             <div className="flex flex-wrap gap-2">
               {FORMATIONS.map((f) => (
@@ -103,11 +104,11 @@ export function SetupScreen({ onCreated }: { onCreated: (run: RunState) => void 
             </div>
           </Field>
 
-          <div className="flex flex-wrap gap-2 text-[10px] text-ink/40">
-            <span className="border border-edge px-2 py-1">SCOPE: WORLD DRAFT</span>
-            <span className="border border-edge px-2 py-1">MODE: SQUAD FIRST</span>
-            <span className="border border-edge px-2 py-1 opacity-50">POSITION FIRST · soon</span>
-            <span className="border border-edge px-2 py-1 opacity-50">CLASSIC · soon</span>
+          <div className="flex flex-wrap gap-2">
+            <span className="eyebrow border border-edge px-2 py-1 text-ink/55">Scope · World Draft</span>
+            <span className="eyebrow border border-edge px-2 py-1 text-ink/55">Mode · Squad First</span>
+            <span className="eyebrow border border-edge px-2 py-1 text-ink/30">Position First · soon</span>
+            <span className="eyebrow border border-edge px-2 py-1 text-ink/30">Classic · soon</span>
           </div>
         </div>
       </Panel>
@@ -119,9 +120,9 @@ export function SetupScreen({ onCreated }: { onCreated: (run: RunState) => void 
         whileTap={{ scale: busy ? 1 : 0.99 }}
         disabled={busy}
         onClick={initiate}
-        className="w-full border-2 border-phosphor bg-phosphor/10 py-4 text-lg font-extrabold tracking-[0.3em] text-phosphor glow-phosphor disabled:opacity-50"
+        className="w-full bg-amber py-4 text-base font-bold uppercase tracking-[0.18em] text-terminal transition hover:bg-ink-bright disabled:opacity-50"
       >
-        {busy ? 'DEPLOYING…' : '▸ INITIATE DRAFT'}
+        {busy ? 'Dealing the cards…' : 'Begin the Draft'}
       </motion.button>
     </div>
   )
@@ -131,8 +132,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return (
     <div>
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-[11px] tracking-mega text-ink/70">{label}</span>
-        {hint && <span className="text-[10px] text-ink/35">{hint}</span>}
+        <span className="eyebrow text-ink/65">{label}</span>
+        {hint && <span className="font-display text-[12px] italic text-ink/40">{hint}</span>}
       </div>
       {children}
     </div>
@@ -143,10 +144,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`border px-3 py-1.5 text-sm font-bold tracking-wide transition ${
+      className={`border px-3.5 py-1.5 text-sm font-semibold tracking-wide transition ${
         active
-          ? 'border-amber bg-amber/10 text-amber glow-amber'
-          : 'border-edge text-ink/60 hover:border-edge-bright hover:text-ink'
+          ? 'border-amber/60 bg-amber/12 text-amber'
+          : 'border-edge text-ink/55 hover:border-edge-bright hover:text-ink-bright'
       }`}
     >
       {children}
@@ -164,13 +165,13 @@ function Segmented<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div className="inline-flex border border-edge">
+    <div className="inline-flex divide-x divide-edge border border-edge">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-4 py-1.5 text-sm font-bold tracking-wide transition ${
-            value === o.value ? 'bg-amber/15 text-amber glow-amber' : 'text-ink/55 hover:text-ink'
+          className={`px-4 py-1.5 text-sm font-semibold tracking-wide transition ${
+            value === o.value ? 'bg-amber/12 text-amber' : 'text-ink/55 hover:text-ink-bright'
           }`}
         >
           {o.label}

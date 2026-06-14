@@ -32,7 +32,7 @@ export function RatingBadge({
   const isRange = r.kind === 'range'
   return (
     <span
-      className={`inline-flex items-center justify-center border ${lc.border} ${lc.text} ${lc.glow} bg-black/40 ${SIZES[size]} font-bold tabular-nums ${isRange ? 'text-[0.62em] leading-none' : ''}`}
+      className={`inline-flex items-center justify-center border ${lc.border} ${lc.text} ${lc.glow} bg-terminal/60 ${SIZES[size]} font-bold tabular-nums ${isRange ? 'text-[0.62em] leading-none' : ''}`}
     >
       {r.text}
     </span>
