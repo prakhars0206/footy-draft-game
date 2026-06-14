@@ -178,7 +178,7 @@ public class DraftRunService {
     private Spin spinChoices(DraftRunEntity run, List<ClubSeason> eligible) {
         List<String> open = run.openSlots().stream().map(DraftSlotEntity::getPosition).toList();
         Set<String> draftedFrom = run.getSlots().stream().filter(DraftSlotEntity::isFilled)
-            .map(s -> norm(s.getSourceClub())).collect(java.util.stream.Collectors.toSet());
+            .map(s -> ClubSeason.normClub(s.getSourceClub())).collect(java.util.stream.Collectors.toSet());
         Random rng = new Random(run.getSeed() * 1000003L + run.nextSpinIndex());
 
         List<DraftTiers.Tier> remaining = new ArrayList<>(DraftTiers.TIERS);
@@ -190,7 +190,7 @@ public class DraftRunService {
             List<ClubSeason> chosen = new ArrayList<>();
             Set<String> seen = new HashSet<>();
             for (ClubSeason cs : pool) {
-                String nc = norm(cs.club);
+                String nc = cs.clubKey();
                 if (draftedFrom.contains(nc) || !seen.add(nc)) continue;   // distinct, not already drafted from
                 if (!coversAnyOpenSlot(run, cs, open)) continue;
                 chosen.add(cs);
@@ -205,9 +205,6 @@ public class DraftRunService {
         return new Spin(DraftTiers.label(eligible.get(0).optimalStrength()), List.of(eligible.get(0)));
     }
 
-    private static String norm(String club) {
-        return club == null ? "" : club.toLowerCase().replaceAll("[^a-z0-9]", "");
-    }
 
     private boolean coversAnyOpenSlot(DraftRunEntity run, ClubSeason cs, List<String> openPositions) {
         for (Player p : cs.roster) {

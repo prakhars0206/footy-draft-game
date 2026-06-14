@@ -23,6 +23,23 @@ public final class ClubSeason {
 
     public String label() { return club + " " + season; }
 
+    /** A stable club identity for dedup — folds the spelling drift the same real club shows across editions. */
+    public String clubKey() { return normClub(club); }
+
+    /**
+     * Normalise a club name for dedup: strip accents (é→e), drop filler/club-type tokens that vary across
+     * editions ("de", FC/CF/AC/SS…), then strip the rest. So "Atlético Madrid" == "Atlético de Madrid", and
+     * "Paris Saint-Germain" == "Paris Saint Germain", collapse to one club.
+     */
+    public static String normClub(String name) {
+        if (name == null) return "";
+        return java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+", "")                                              // drop accent marks
+            .toLowerCase()
+            .replaceAll("\\b(fc|cf|sc|cd|ac|afc|ss|ssc|as|rc|rcd|ud|sd|cp|club|de|del|da|do|the|deportivo|calcio)\\b", " ")
+            .replaceAll("[^a-z0-9]", "");
+    }
+
     /** Finds the XI with the MOST natural fits across all formations. Uses overall as a tiebreaker. */
     public Xi optimalXi() {
         if (cachedOptimalXi == null) {

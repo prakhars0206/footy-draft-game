@@ -55,20 +55,15 @@ public final class OpponentPyramid {
                 guard++;
                 // Dedupe by NORMALISED club (not club-season) so one league never fields two eras of the same
                 // club — even when the spelling drifts across editions ("Paris Saint-Germain" vs "…Saint Germain").
-                if (picked.add(normClub(cs.club))) { opponents.add(cs.optimalXi()); placed++; }
+                if (picked.add(cs.clubKey())) { opponents.add(cs.optimalXi()); placed++; }
             }
         }
         // Safety: top up to 19 from anywhere if some bands were thin.
         int guard = 0;
         while (opponents.size() < OPPONENTS && !pool.isEmpty() && guard++ < 500) {
             ClubSeason cs = pool.get(rng.nextInt(pool.size()));
-            if (picked.add(normClub(cs.club))) opponents.add(cs.optimalXi());
+            if (picked.add(cs.clubKey())) opponents.add(cs.optimalXi());
         }
         return opponents.subList(0, Math.min(OPPONENTS, opponents.size()));
-    }
-
-    /** Lowercase, strip non-alphanumerics so "Paris Saint-Germain" and "Paris Saint Germain" collapse to one club. */
-    private static String normClub(String club) {
-        return club.toLowerCase().replaceAll("[^a-z0-9]", "");
     }
 }
