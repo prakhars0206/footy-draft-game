@@ -17,13 +17,14 @@ export function Distribution({ mc, actual, height = 'h-20' }: { mc: MonteCarlo; 
         {mc.histogram.map((c, i) => {
           const isAct = i === actualBin
           const isMed = i === medianBin && !isAct
+          // Bars are DIRECT flex children so the % height resolves against the row's definite height.
           return (
-            <div key={i} className="flex flex-1 items-end" title={`${mc.histMin + i * mc.histBinWidth}–${mc.histMin + (i + 1) * mc.histBinWidth - 1} pts · ${c}`}>
-              <div
-                className={`w-full ${isAct ? 'bg-amber' : isMed ? 'bg-ink/45' : 'bg-edge-bright'}`}
-                style={{ height: `${Math.max(c > 0 ? 3 : 0, (c / maxC) * 100)}%` }}
-              />
-            </div>
+            <div
+              key={i}
+              title={`${mc.histMin + i * mc.histBinWidth}–${mc.histMin + (i + 1) * mc.histBinWidth - 1} pts · ${c}`}
+              className={`flex-1 ${isAct ? 'bg-amber' : isMed ? 'bg-ink/60' : 'bg-ink/25'}`}
+              style={{ height: `${Math.max(c > 0 ? 6 : 0, (c / maxC) * 100)}%` }}
+            />
           )
         })}
       </div>
