@@ -7,7 +7,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -56,9 +58,10 @@ public class DraftRunController {
     /** A player within a team-viewer XI; stats are null pre-sim (league preview), populated post-sim. */
     public record XiSlotView(String position, String line, String name, int overall,
                              Integer goals, Integer assists, Integer cleanSheets) { }
-    public record LeagueTeamView(String team, int strength, String tier, String formation, List<XiSlotView> xi) { }
+    public record LeagueTeamView(String team, int strength, String tier, String formation, List<XiSlotView> xi,
+                                 int projectedPoints, int projectedPos) { }
     public record PreviewView(SeasonViewMapper.OddsView projection, int userOverall, int leagueMean,
-                              List<LeagueTeamView> league) { }
+                              int userProjectedPos, List<LeagueTeamView> league) { }
 
     // ---- endpoints ----
 
@@ -101,12 +104,39 @@ public class DraftRunController {
     public PreviewView preview(@PathVariable String id) {
         var p = service.preview(id);
         var o = p.projection();
-        List<LeagueTeamView> league = p.league().stream()
-            .map(DraftRunController::toLeagueTeam)
-            .sorted((a, b) -> Integer.compare(b.strength(), a.strength()))
+        List<Xi> opps = p.league();
+        int teamCount = opps.size() + 1;                                   // you + 19 opponents
+        int sumAll = p.userOverall() + opps.stream().mapToInt(Xi::overall).sum();
+
+        // League-aware projected points per team — each team's effective overall is shifted by the mean of the
+        // OTHER 19, exactly as the debrief does, so the pre-season table and the result never disagree.
+        Map<Xi, Integer> projPts = new HashMap<>();
+        for (Xi xi : opps) {
+            int meanOthers = (int) Math.round((sumAll - xi.overall()) / (double) (teamCount - 1));
+            projPts.put(xi, LeagueProjection.expectedPoints(xi.overall(), meanOthers));
+        }
+        int userProjPts = o.expectedPoints();                             // already league-aware (mean of the 19)
+
+        // Projected finish: rank all 20 (you + opponents) by projected points, strength breaking ties.
+        record Rankable(Xi xi, int pts, int strength) { }                 // xi == null => the user
+        List<Rankable> rank = new ArrayList<>();
+        rank.add(new Rankable(null, userProjPts, p.userOverall()));
+        for (Xi xi : opps) rank.add(new Rankable(xi, projPts.get(xi), xi.overall()));
+        rank.sort(Comparator.comparingInt(Rankable::pts).reversed()
+            .thenComparing(Comparator.comparingInt(Rankable::strength).reversed()));
+        Map<Xi, Integer> projPos = new HashMap<>();
+        int userProjPos = 0;
+        for (int i = 0; i < rank.size(); i++) {
+            Rankable r = rank.get(i);
+            if (r.xi() == null) userProjPos = i + 1; else projPos.put(r.xi(), i + 1);
+        }
+
+        List<LeagueTeamView> league = opps.stream()
+            .map(xi -> toLeagueTeam(xi, projPts.get(xi), projPos.get(xi)))
+            .sorted(Comparator.comparingInt(LeagueTeamView::projectedPos))
             .toList();
         return new PreviewView(new SeasonViewMapper.OddsView(o.expectedPoints(), o.winLeague(), o.top4(), o.relegation()),
-            p.userOverall(), p.leagueMean(), league);
+            p.userOverall(), p.leagueMean(), userProjPos, league);
     }
 
     @PostMapping("/{id}/simulate")
@@ -158,12 +188,13 @@ public class DraftRunController {
         return out;
     }
 
-    private static LeagueTeamView toLeagueTeam(Xi xi) {
+    private static LeagueTeamView toLeagueTeam(Xi xi, int projectedPoints, int projectedPos) {
         var ord = TeamLayout.inFormationOrder(xi); // lay the XI out in its own formation for the pitch viewer
         List<XiSlotView> squad = ord.slots().stream()
             .map(s -> new XiSlotView(s.position(), s.line().name(), s.player().name(), s.player().overall(), null, null, null))
             .toList();
-        return new LeagueTeamView(xi.name, xi.overall(), tierLabel(xi.overall()), ord.formation(), squad);
+        return new LeagueTeamView(xi.name, xi.overall(), tierLabel(xi.overall()), ord.formation(), squad,
+            projectedPoints, projectedPos);
     }
 
     private static String tierLabel(int strength) {

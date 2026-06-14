@@ -100,11 +100,14 @@ export interface LeagueTeam {
   tier: string
   formation: string
   xi: XiSlot[]
+  projectedPoints: number
+  projectedPos: number
 }
 export interface Preview {
   projection: Odds
   userOverall: number
   leagueMean: number
+  userProjectedPos: number
   league: LeagueTeam[]
 }
 

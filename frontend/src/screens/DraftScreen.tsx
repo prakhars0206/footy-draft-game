@@ -12,6 +12,11 @@ import { RatingBadge } from '../components/RatingBadge'
 import { PositionChip } from '../components/PositionChip'
 import { Panel, Prompt, Stamp } from '../components/primitives'
 
+const ordinal = (n: number) => {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
 const TIER_COLOR: Record<string, string> = {
   JUGGERNAUT: 'text-amber border-amber',
   "TITLE CONTENDER": 'text-phosphor border-phosphor',
@@ -224,8 +229,11 @@ function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | n
       <div className="shrink-0">
         <div className="flex items-end justify-between">
           <div>
-            <div className="text-[10px] tracking-mega text-ink/50">PROJECTED</div>
-            <div className="text-4xl font-extrabold text-amber glow-amber tabular-nums">{p?.expectedPoints ?? '—'}<span className="text-sm text-ink/50"> pts</span></div>
+            <div className="text-[10px] tracking-mega text-ink/50">PROJECTED FINISH</div>
+            <div className="text-4xl font-extrabold text-amber glow-amber tabular-nums">
+              {preview ? ordinal(preview.userProjectedPos) : '—'}
+              <span className="text-sm text-ink/50"> · {p?.expectedPoints ?? '—'} pts</span>
+            </div>
           </div>
           <div className="text-right text-[10px] text-ink/50">
             YOUR OVR <span className="text-ink-bright">{preview?.userOverall ?? '—'}</span><br />
@@ -237,14 +245,17 @@ function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | n
           <OddsRow label="TOP 4" v={p?.top4 ?? 0} />
           <OddsRow label="RELEGATION" v={p?.relegation ?? 0} />
         </div>
-        <div className="mt-3 mb-1 text-[10px] tracking-mega text-ink/50">OPPONENTS · tap to scout</div>
+        <div className="mt-3 mb-1 flex items-center gap-2 text-[10px] tracking-mega text-ink/50">
+          <span className="w-5 text-right">#</span><span className="flex-1">OPPONENTS · tap to scout</span><span className="w-11 text-right">PROJ</span><span className="w-7 text-right">OVR</span>
+        </div>
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {(preview?.league ?? []).map((t, i) => (
           <button key={i} onClick={() => onInspect(t)} className="flex w-full items-center gap-2 border border-edge px-2 py-1 text-left text-sm hover:border-edge-bright">
-            <span className="w-5 text-right text-ink/40">{i + 1}</span>
+            <span className="w-5 text-right tabular-nums text-ink/40">{t.projectedPos}</span>
             <span className="flex-1 truncate text-ink-bright">{t.team}</span>
             <span className={`border px-1 text-[9px] ${TIER_COLOR[t.tier] ?? 'text-ink border-edge'}`}>{t.tier}</span>
+            <span className="w-11 text-right text-[11px] tabular-nums text-ink/55">{t.projectedPoints} pt</span>
             <span className="w-7 text-right font-extrabold tabular-nums text-amber">{t.strength}</span>
           </button>
         ))}
