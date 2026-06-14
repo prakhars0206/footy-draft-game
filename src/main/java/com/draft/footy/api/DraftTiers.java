@@ -5,8 +5,8 @@ import java.util.Random;
 
 /**
  * Draft tier bands + how often a spin LANDS on each tier — the difficulty / squad-ceiling knob. Landings are
- * weighted (not uniform over clubs, which would be Mid-Table-heavy) so a well-played draft reaches ~84–86, with
- * Juggernaut a rare jackpot. Tune the weights to move the ceiling. Bands match {@code DraftRunController.tierLabel}.
+ * weighted (not uniform over clubs, which would be Steady-heavy) so a well-played draft reaches ~84–86, with
+ * the Iconic tier a rare jackpot. Tune the weights to move the ceiling. Bands match {@code DraftRunController.tierLabel}.
  */
 final class DraftTiers {
     private DraftTiers() { }
@@ -14,11 +14,11 @@ final class DraftTiers {
     record Tier(String label, int min, int max, int landingWeight) { }
 
     static final List<Tier> TIERS = List.of(
-        new Tier("JUGGERNAUT",          87, 99,  5),
-        new Tier("TITLE CONTENDER",     83, 86, 22),
-        new Tier("EUROPEAN CHASER",     78, 82, 40),
-        new Tier("MID-TABLE",           72, 77, 26),
-        new Tier("RELEGATION SCRAPPER", 58, 71,  7)
+        new Tier("ICONIC",   87, 99,  5),
+        new Tier("ELITE",    83, 86, 22),
+        new Tier("PEDIGREE", 78, 82, 40),
+        new Tier("STEADY",   72, 77, 26),
+        new Tier("MINNOW",   58, 71,  7)
     );
 
     static String label(int strength) {

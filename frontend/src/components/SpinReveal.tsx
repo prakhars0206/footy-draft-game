@@ -3,74 +3,71 @@ import { motion } from 'framer-motion'
 import type { SpinView, SpinClub } from '../api'
 import { Panel, Stamp } from './primitives'
 
-// Fake names that flicker past during the "locking on" scan — the suspense before you see what you landed on.
-const FLICKER = [
-  'Real Madrid', 'Bayern', 'Liverpool', 'Juventus', 'Ajax', 'Sevilla', 'Napoli', 'Lyon', 'Roma', 'Valencia',
-  'Benfica', 'Dortmund', 'Inter', 'Milan', 'Arsenal', 'Chelsea', 'Porto', 'Lazio', 'Monaco', 'Leeds',
-]
-
 type Style = {
   text: string; border: string; banner: string; tone: 'amber' | 'phosphor' | 'danger'
   epic: boolean; rgb: string; scanMs: number; tagline: string
 }
 const TIER_STYLE: Record<string, Style> = {
-  JUGGERNAUT:            { text: 'text-amber',      border: 'border-amber',       banner: 'Juggernaut',          tone: 'amber',    epic: true,  rgb: '200,151,63',  scanMs: 2700, tagline: 'a colossus of the game lands' },
-  'TITLE CONTENDER':     { text: 'text-phosphor',   border: 'border-phosphor',    banner: 'Title Contender',     tone: 'phosphor', epic: true,  rgb: '111,158,126', scanMs: 2300, tagline: 'genuine silverware pedigree' },
-  'EUROPEAN CHASER':     { text: 'text-def',        border: 'border-def',         banner: 'European Chaser',     tone: 'phosphor', epic: false, rgb: '91,134,179',  scanMs: 1800, tagline: 'European nights beckon' },
-  'MID-TABLE':           { text: 'text-ink-bright', border: 'border-edge-bright', banner: 'Mid-Table',           tone: 'amber',    epic: false, rgb: '239,231,214', scanMs: 1500, tagline: 'a solid, workmanlike squad' },
-  'RELEGATION SCRAPPER': { text: 'text-danger',     border: 'border-danger',      banner: 'Relegation Scrapper', tone: 'danger',   epic: false, rgb: '178,74,64',   scanMs: 1400, tagline: 'a proper scrap on your hands' },
+  ICONIC:   { text: 'text-amber',      border: 'border-amber',       banner: 'Iconic',   tone: 'amber',    epic: true,  rgb: '200,151,63',  scanMs: 2700, tagline: 'a colossus of the game' },
+  ELITE:    { text: 'text-phosphor',   border: 'border-phosphor',    banner: 'Elite',    tone: 'phosphor', epic: true,  rgb: '111,158,126', scanMs: 2300, tagline: 'a genuine title threat' },
+  PEDIGREE: { text: 'text-def',        border: 'border-def',         banner: 'Pedigree', tone: 'phosphor', epic: false, rgb: '91,134,179',  scanMs: 1800, tagline: 'European nights beckon' },
+  STEADY:   { text: 'text-ink-bright', border: 'border-edge-bright', banner: 'Steady',   tone: 'amber',    epic: false, rgb: '239,231,214', scanMs: 1500, tagline: 'a solid, honest squad' },
+  MINNOW:   { text: 'text-danger',     border: 'border-danger',      banner: 'Minnow',   tone: 'danger',   epic: false, rgb: '178,74,64',   scanMs: 1400, tagline: 'an underdog’s scrap' },
 }
+const REEL = ['ICONIC', 'ELITE', 'PEDIGREE', 'STEADY', 'MINNOW'] // the wheel the spin ticks through
 
 export function SpinReveal({ spin, onPick }: { spin: SpinView; onPick: (club: SpinClub) => void }) {
   const [phase, setPhase] = useState<'scan' | 'reveal'>('scan')
-  const [flick, setFlick] = useState(FLICKER[0])
-  const st = TIER_STYLE[spin.tier] ?? TIER_STYLE['MID-TABLE']
+  const [reel, setReel] = useState(0)
+  const st = TIER_STYLE[spin.tier] ?? TIER_STYLE.STEADY
   const accent: 'edge' | 'amber' | 'phosphor' = st.epic && st.tone !== 'danger' ? st.tone : 'edge'
 
-  // Decelerating "roulette" flicker — names whip past, then slow as the spin settles on its club.
+  // The wheel: tier names tick past, decelerating (slot-machine), then settle on the tier you landed.
   useEffect(() => {
-    let alive = true
-    let elapsed = 0
-    let delay = 55
+    const target = Math.max(0, REEL.indexOf(spin.tier))
+    const timers: ReturnType<typeof setTimeout>[] = []
+    let alive = true, elapsed = 0, delay = 60, i = 0
     const tick = () => {
       if (!alive) return
-      setFlick(FLICKER[Math.floor(Math.random() * FLICKER.length)])
+      setReel(i % REEL.length)
       elapsed += delay
-      if (elapsed / st.scanMs > 0.5) delay += st.epic ? 42 : 24 // ease off near the end
-      if (elapsed >= st.scanMs) { setPhase('reveal'); return }
-      id = setTimeout(tick, delay)
+      if (elapsed / st.scanMs > 0.5) delay += st.epic ? 48 : 30 // ease off near the end
+      if (elapsed >= st.scanMs) {
+        setReel(target)                                          // land on the real tier, hold, then reveal
+        timers.push(setTimeout(() => { if (alive) setPhase('reveal') }, 320))
+        return
+      }
+      i++
+      timers.push(setTimeout(tick, delay))
     }
-    let id = setTimeout(tick, delay)
-    return () => { alive = false; clearTimeout(id) }
-  }, [st])
+    timers.push(setTimeout(tick, delay))
+    return () => { alive = false; timers.forEach(clearTimeout) }
+  }, [st, spin.tier])
 
   const bloom = (a: number) => ({ background: `radial-gradient(circle at 50% 42%, rgba(${st.rgb},${a}), transparent 62%)` })
+  const reelSt = TIER_STYLE[REEL[reel]] ?? TIER_STYLE.STEADY
 
   return (
-    <Panel
-      accent={accent}
-      className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden p-6 text-center"
-    >
+    <Panel accent={accent} className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden p-6 text-center">
       {phase === 'scan' ? (
-        <>
-          {/* a glow that builds as the spin charges — stronger for elite tiers */}
-          <motion.div className="pointer-events-none absolute inset-0" style={bloom(st.epic ? 0.18 : 0.08)}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: st.scanMs / 1000 }} />
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="eyebrow text-ink/50">{st.epic ? 'The wheel is slowing' : 'Drawing your club'}</div>
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="eyebrow text-ink/45">Spinning the wheel</div>
+          {/* the reel window — tier names tick through, framed by hairline rails */}
+          <div className="relative mt-5 h-16 w-72 overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-edge-bright" />
+            <div className="pointer-events-none absolute inset-x-6 bottom-0 h-px bg-edge-bright" />
             <motion.div
-              key={flick}
-              initial={{ opacity: 0.3, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12 }}
-              className="mt-4 font-display text-3xl italic text-ink/35"
+              key={reel}
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.11 }}
+              className={`absolute inset-0 flex items-center justify-center font-display text-4xl font-black tracking-tight ${reelSt.text}`}
             >
-              {flick}…
+              {reelSt.banner}
             </motion.div>
-            <div className="mt-6 h-1 w-52 overflow-hidden bg-panel-2">
-              <motion.div className={`h-full ${st.epic ? 'bg-amber' : 'bg-edge-bright'}`}
-                initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: st.scanMs / 1000, ease: 'easeOut' }} />
-            </div>
           </div>
-        </>
+          <div className="eyebrow mt-5 text-ink/30">which tier will you land?</div>
+        </div>
       ) : (
         <>
           {/* ambience: a colour bloom (pulsing for elite tiers) + a one-off shimmer sweep */}
@@ -92,7 +89,6 @@ export function SpinReveal({ spin, onPick }: { spin: SpinView; onPick: (club: Sp
           >
             <motion.div
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className={`font-display text-3xl font-black leading-none ${st.text}`}
               style={st.epic ? { textShadow: `0 0 24px rgba(${st.rgb},0.45)` } : undefined}
             >
               <Stamp text={st.banner} tone={st.tone} className="text-sm" />
@@ -102,7 +98,7 @@ export function SpinReveal({ spin, onPick }: { spin: SpinView; onPick: (club: Sp
               {st.tagline}
             </motion.div>
 
-            <div className="eyebrow mt-5 text-ink/45">Choose your club</div>
+            <div className="eyebrow mt-5 text-ink/45">Choose your club — this is final</div>
             <div className="mt-2 w-full space-y-2">
               {spin.clubs.map((c, i) => (
                 <motion.button

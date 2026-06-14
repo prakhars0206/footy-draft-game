@@ -20,11 +20,11 @@ const ordinal = (n: number) => {
 const pct = (v: number) => `${Math.round(v * 100)}%`
 
 const TIER_COLOR: Record<string, string> = {
-  JUGGERNAUT: 'text-amber border-amber',
-  "TITLE CONTENDER": 'text-phosphor border-phosphor',
-  "EUROPEAN CHASER": 'text-def border-def',
-  'MID-TABLE': 'text-ink border-edge-bright',
-  "RELEGATION SCRAPPER": 'text-danger border-danger',
+  ICONIC: 'text-amber border-amber',
+  ELITE: 'text-phosphor border-phosphor',
+  PEDIGREE: 'text-def border-def',
+  STEADY: 'text-ink border-edge-bright',
+  MINNOW: 'text-danger border-danger',
 }
 
 export function DraftScreen({
@@ -144,10 +144,9 @@ export function DraftScreen({
             <SpinReveal spin={spin} onPick={(c) => { setChosenClub(c); setSelected(null); setRevealing(false) }} />
           ) : (
             <SquadPanel
-              club={chosenClub} tier={spin.tier} multiClub={spin.clubs.length > 1}
+              club={chosenClub} tier={spin.tier}
               selected={selected} busy={busy} canReroll={run.rerollsRemaining > 0}
               onSelect={(p) => { setSelected(p); setMoveFrom(null) }}
-              onBack={() => { setSelected(null); setRevealing(true) }}
               onReroll={doSpin} onDraft={(p, pos) => doDraft(pos, p.sofifaId)}
             />
           )}
@@ -299,10 +298,10 @@ function OddsRow({ label, v }: { label: string; v: number }) {
 }
 
 function SquadPanel({
-  club, tier, multiClub, selected, busy, canReroll, onSelect, onBack, onReroll, onDraft,
+  club, tier, selected, busy, canReroll, onSelect, onReroll, onDraft,
 }: {
-  club: SpinClub; tier: string; multiClub: boolean; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
-  onSelect: (p: SquadPlayer) => void; onBack: () => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
+  club: SpinClub; tier: string; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
+  onSelect: (p: SquadPlayer) => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
 }) {
   return (
     <Panel label={`Draft from · ${tier.toLowerCase()}`} className="flex min-h-0 flex-1 flex-col p-4">
@@ -311,10 +310,7 @@ function SquadPanel({
           <div className="truncate font-display text-lg font-semibold text-ink-bright">{club.club}</div>
           <div className="text-[11px] text-ink/50">{club.season}{club.league ? ` · ${club.league}` : ''}</div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {multiClub && <button disabled={busy} onClick={onBack} className="border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">◂ Clubs</button>}
-          <button disabled={busy || !canReroll} onClick={onReroll} className="border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
-        </div>
+        <button disabled={busy || !canReroll} onClick={onReroll} className="shrink-0 border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
         {club.squad.map((p, i) => {
