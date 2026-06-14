@@ -55,7 +55,7 @@ public final class MonteCarlo {
             double[] form = new double[n];
             for (int t = 0; t < n; t++) form[t] = rng.nextGaussian() * SeasonSimulator.FORM_SIGMA;
 
-            int[] pts = new int[n], gd = new int[n];
+            int[] pts = new int[n], gd = new int[n], gf = new int[n];
             int userWins = 0, userLosses = 0;
             for (List<int[]> round : schedule) {
                 for (int[] fx : round) {
@@ -63,6 +63,7 @@ public final class MonteCarlo {
                     int[] sc = engine.fastScore(teams[h], teams[a], form[h], form[a], rng);
                     int hg = sc[0], ag = sc[1];
                     gd[h] += hg - ag; gd[a] += ag - hg;
+                    gf[h] += hg; gf[a] += ag;
                     if (hg > ag) { pts[h] += 3; if (h == 0) userWins++; else if (a == 0) userLosses++; }
                     else if (hg < ag) { pts[a] += 3; if (a == 0) userWins++; else if (h == 0) userLosses++; }
                     else { pts[h]++; pts[a]++; }
@@ -71,10 +72,14 @@ public final class MonteCarlo {
 
             for (int t = 0; t < n; t++) teamPointsSum[t] += pts[t];
 
-            int up = pts[0], ugd = gd[0];
-            int pos = 1;                              // 1 + teams ranked strictly above the user (points, then GD)
+            // Position = 1 + teams ranked strictly above the user — points, then GD, then GF (matches the full
+            // SeasonSimulator table order exactly, so MC odds and the real season agree even on tied rows).
+            int up = pts[0], ugd = gd[0], ugf = gf[0];
+            int pos = 1;
             for (int t = 1; t < n; t++)
-                if (pts[t] > up || (pts[t] == up && gd[t] > ugd)) pos++;
+                if (pts[t] > up
+                    || (pts[t] == up && gd[t] > ugd)
+                    || (pts[t] == up && gd[t] == ugd && gf[t] > ugf)) pos++;
 
             points[s] = up;
             if (pos == 1) title++;
