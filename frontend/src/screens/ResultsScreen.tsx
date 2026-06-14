@@ -6,7 +6,6 @@ import { Panel, Stamp } from '../components/primitives'
 import { TeamPitch } from '../components/TeamPitch'
 
 export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewRun: () => void }) {
-  const [tableOpen, setTableOpen] = useState(false)
   const [tableView, setTableView] = useState<'actual' | 'projected'>('actual')
   const [team, setTeam] = useState<TeamRow | null>(null)
 
@@ -24,7 +23,6 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
   const rows = tableView === 'projected'
     ? [...season.table].sort((a, b) => a.projectedPos - b.projectedPos)
     : season.table
-  const shown = tableOpen ? rows : rows.slice(0, 6)
 
   return (
     <motion.div className="space-y-5" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.07 } } }}>
@@ -87,7 +85,7 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
 
       <Reveal>
         <Panel label="Final Table · tap a team to scout" className="p-5">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <div className="inline-flex divide-x divide-edge border border-edge text-xs">
               {(['actual', 'projected'] as const).map((v) => (
                 <button key={v} onClick={() => setTableView(v)} className={`px-3 py-1 font-semibold tracking-wide ${tableView === v ? 'bg-amber/12 text-amber' : 'text-ink/50 hover:text-ink-bright'}`}>
@@ -95,25 +93,70 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
                 </button>
               ))}
             </div>
-            <button onClick={() => setTableOpen((o) => !o)} className="text-xs font-semibold text-amber hover:text-ink-bright">{tableOpen ? 'show less' : 'show all 20'}</button>
+            {tableView === 'actual' && (
+              <div className="flex items-center gap-3 text-[10px] text-ink/40">
+                <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber" />champion</span>
+                <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-phosphor" />top 4</span>
+                <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-danger" />drop</span>
+              </div>
+            )}
           </div>
-          <div className="space-y-0.5">
-            {shown.map((t) => (
+          {/* column header */}
+          <div className="mb-1 flex items-center gap-2 px-2 text-[10px] text-ink/40">
+            <span className="w-6 text-right">#</span>
+            <span className="flex-1">Club</span>
+            {tableView === 'actual' ? (
+              <>
+                <span className="w-10 text-right">+/−</span>
+                <span className="hidden w-6 text-right md:inline">P</span>
+                <span className="hidden w-6 text-right md:inline">W</span>
+                <span className="hidden w-6 text-right md:inline">D</span>
+                <span className="hidden w-6 text-right md:inline">L</span>
+                <span className="hidden w-8 text-right sm:inline">GF</span>
+                <span className="hidden w-8 text-right sm:inline">GA</span>
+                <span className="w-9 text-right">GD</span>
+                <span className="w-8 text-right">Pts</span>
+              </>
+            ) : (
+              <>
+                <span className="w-12 text-right">Shape</span>
+                <span className="hidden w-14 text-right sm:inline">OVR</span>
+                <span className="w-12 text-right">Proj</span>
+              </>
+            )}
+          </div>
+          <div>
+            {rows.map((t) => {
+              const zone = t.pos === 1 ? 'text-amber' : t.pos <= 4 ? 'text-phosphor' : t.pos >= 18 ? 'text-danger' : 'text-ink/45'
+              const divider = tableView === 'actual' && (t.pos === 4 || t.pos === 17) ? 'mb-1 border-b border-dashed border-edge-bright/50 pb-1' : 'py-0.5'
+              return (
               <button
                 key={t.team + t.pos}
                 onClick={() => setTeam(t)}
-                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${t.you ? 'border border-amber/60 bg-amber/10 text-amber' : 'border border-transparent text-ink/75 hover:border-edge-bright'}`}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${divider} ${t.you ? 'border border-amber/60 bg-amber/10 text-amber' : 'border border-transparent text-ink/75 hover:border-edge-bright'}`}
               >
-                <span className="w-6 text-right tabular-nums text-ink/45">{tableView === 'projected' ? t.projectedPos : t.pos}</span>
+                <span className={`w-6 text-right font-semibold tabular-nums ${t.you ? '' : zone}`}>{tableView === 'projected' ? t.projectedPos : t.pos}</span>
                 <span className="flex-1 truncate font-semibold">{t.team}</span>
                 {tableView === 'actual'
-                  ? <><Movement move={t.projectedPos - t.pos} /><span className="hidden w-16 text-right tabular-nums text-ink/45 sm:inline">{t.won}-{t.drawn}-{t.lost}</span><span className="w-9 text-right tabular-nums">{gdStr(t.gd)}</span><span className="w-8 text-right font-bold tabular-nums">{t.points}</span></>
-                  : <><span className="border border-edge px-1 text-[9px] text-ink/50">{t.formation}</span><span className="hidden w-14 text-right text-[10px] tabular-nums text-ink/40 sm:inline">OVR {t.strength}</span><span className="w-12 text-right font-bold tabular-nums text-amber">{t.projectedPoints}<span className="text-[9px] font-normal text-ink/40">pts</span></span></>}
+                  ? <>
+                      <Movement move={t.projectedPos - t.pos} />
+                      <span className="hidden w-6 text-right tabular-nums text-ink/45 md:inline">{t.won + t.drawn + t.lost}</span>
+                      <span className="hidden w-6 text-right tabular-nums text-ink/45 md:inline">{t.won}</span>
+                      <span className="hidden w-6 text-right tabular-nums text-ink/45 md:inline">{t.drawn}</span>
+                      <span className="hidden w-6 text-right tabular-nums text-ink/45 md:inline">{t.lost}</span>
+                      <span className="hidden w-8 text-right tabular-nums text-ink/55 sm:inline">{t.gf}</span>
+                      <span className="hidden w-8 text-right tabular-nums text-ink/55 sm:inline">{t.ga}</span>
+                      <span className="w-9 text-right tabular-nums">{gdStr(t.gd)}</span>
+                      <span className="w-8 text-right font-bold tabular-nums">{t.points}</span>
+                    </>
+                  : <>
+                      <span className="w-12 text-right text-[10px] text-ink/50">{t.formation}</span>
+                      <span className="hidden w-14 text-right text-[10px] tabular-nums text-ink/40 sm:inline">OVR {t.strength}</span>
+                      <span className="w-12 text-right font-bold tabular-nums text-amber">{t.projectedPoints}<span className="text-[9px] font-normal text-ink/40">pts</span></span>
+                    </>}
               </button>
-            ))}
-            {!tableOpen && season.finishPos > 6 && tableView === 'actual' && (
-              <div className="pt-1.5 text-center font-display text-[12px] italic text-ink/40">… show all to find your XI ({ordinal(season.finishPos)}) …</div>
-            )}
+              )
+            })}
           </div>
         </Panel>
       </Reveal>

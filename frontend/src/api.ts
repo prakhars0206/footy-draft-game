@@ -146,6 +146,8 @@ export interface TeamRow {
   won: number
   drawn: number
   lost: number
+  gf: number
+  ga: number
   gd: number
   you: boolean
   players: XiSlot[]

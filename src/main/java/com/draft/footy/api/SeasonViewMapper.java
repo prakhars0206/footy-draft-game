@@ -19,7 +19,7 @@ public final class SeasonViewMapper {
     public record PlayerStatView(String position, String line, String name, int overall,
                                  int goals, int assists, int cleanSheets) { }
     public record TeamRow(int pos, int projectedPos, int projectedPoints, String team, String formation, int strength,
-                          int points, int won, int drawn, int lost, int gd, boolean you,
+                          int points, int won, int drawn, int lost, int gf, int ga, int gd, boolean you,
                           List<PlayerStatView> players) { }
     public record StatRow(String player, String team, int value) { }
     public record OddsView(int expectedPoints, double winLeague, double top4, double relegation) { }
@@ -75,7 +75,7 @@ public final class SeasonViewMapper {
             }).toList();
             table.add(new TeamRow(i + 1, projPos.getOrDefault(s.team, i + 1), projPoints.getOrDefault(s.team, 0),
                 stripFormation(s.team.name), ord.formation(), s.team.overall(),
-                s.points(), s.won, s.drawn, s.lost, s.gd(), s.team == userXi, players));
+                s.points(), s.won, s.drawn, s.lost, s.gf, s.ga, s.gd(), s.team == userXi, players));
         }
 
         // Debrief projection = the SAME league-aware projection the pre-sim panel showed (mean of the other 19).
