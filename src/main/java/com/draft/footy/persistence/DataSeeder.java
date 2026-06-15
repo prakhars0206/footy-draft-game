@@ -2,6 +2,7 @@ package com.draft.footy.persistence;
 
 import com.draft.footy.ClubSeason;
 import com.draft.footy.FifaDataLoader;
+import com.draft.footy.Player;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,12 +69,49 @@ public class DataSeeder {
             clubs.addAll(fresh);
             fresh.forEach(c -> seenSeasons.add(c.season));
         }
+        clubs = bridgePlayerIds(clubs);
         clubs = canonicalizeClubNames(clubs);
         repo.saveAll(clubs.stream().map(EngineMapper::toEntity).toList());
 
         long seasons = clubs.stream().map(c -> c.season).distinct().count();
         log.info("Seeded H2: {} top-5 club-seasons across {} editions ({} players).",
             clubs.size(), seasons, clubs.stream().mapToInt(c -> c.roster.size()).sum());
+    }
+
+    /**
+     * Bridge id-less players to the real sofifa id so Prime Mode (career-best) is consistent across editions.
+     * EA FC 26's ID column already IS the sofifa player_id; only FC 25 has no id column (we assign negative
+     * synthetic ids in the loader). FC 25/26 share EA's full-name format, so we resolve each id-less player by
+     * (name, nation) against the players that DO carry a real id (FC 26 + the sofifa pool). Keys whose (name,
+     * nation) maps to two different real ids are treated as ambiguous and skipped, so we never mis-link
+     * namesakes; unmatched players keep their synthetic id (harmless no-op — same as before).
+     */
+    private static List<ClubSeason> bridgePlayerIds(List<ClubSeason> clubs) {
+        Map<String, Integer> byName = new HashMap<>();
+        Set<String> ambiguous = new HashSet<>();
+        for (ClubSeason cs : clubs)
+            for (Player p : cs.roster)
+                if (p.id() >= 0) {
+                    String k = nameKey(p.name(), p.nation());
+                    Integer prev = byName.putIfAbsent(k, p.id());
+                    if (prev != null && prev != p.id()) ambiguous.add(k);
+                }
+        return clubs.stream().map(cs -> {
+            if (cs.roster.stream().noneMatch(p -> p.id() < 0)) return cs;
+            List<Player> fixed = cs.roster.stream().map(p -> {
+                if (p.id() >= 0) return p;
+                String k = nameKey(p.name(), p.nation());
+                Integer real = ambiguous.contains(k) ? null : byName.get(k);
+                return real == null ? p : new Player(real, p.name(), p.nation(), p.positions(), p.overall(), p.dob());
+            }).toList();
+            return new ClubSeason(cs.club, cs.season, cs.league, fixed);
+        }).toList();
+    }
+
+    /** Accent-stripped, alphanumeric (name, nation) identity key for cross-edition matching. */
+    private static String nameKey(String name, String nation) {
+        return java.text.Normalizer.normalize(name + "|" + nation, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+", "").toLowerCase().replaceAll("[^a-z0-9|]", "");
     }
 
     /**
