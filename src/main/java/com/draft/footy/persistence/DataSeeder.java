@@ -70,6 +70,7 @@ public class DataSeeder {
             fresh.forEach(c -> seenSeasons.add(c.season));
         }
         clubs = bridgePlayerIds(clubs);
+        clubs = unifyPlayerNames(clubs);
         clubs = canonicalizeClubNames(clubs);
         repo.saveAll(clubs.stream().map(EngineMapper::toEntity).toList());
 
@@ -105,6 +106,27 @@ public class DataSeeder {
                 return real == null ? p : new Player(real, p.name(), p.nation(), p.positions(), p.overall(), p.dob());
             }).toList();
             return new ClubSeason(cs.club, cs.season, cs.league, fixed);
+        }).toList();
+    }
+
+    /**
+     * Unify a player's display name across editions to the shortest variant they actually carry. The sofifa
+     * FC 25 dump labels players with verbose full names ("Jude Victor William Bellingham"), whereas the other
+     * editions use the clean short form ("J. Bellingham"). Keyed by the (now-bridged) player id, pick the
+     * shortest real name seen for that id — so every edition shows the same tidy label. Safe: it only ever
+     * reuses a name the same player already had; a player seen only with a long name keeps it.
+     */
+    private static List<ClubSeason> unifyPlayerNames(List<ClubSeason> clubs) {
+        Map<Integer, String> shortest = new HashMap<>();
+        for (ClubSeason cs : clubs)
+            for (Player p : cs.roster)
+                shortest.merge(p.id(), p.name(), (a, b) -> b.length() < a.length() ? b : a);
+        return clubs.stream().map(cs -> {
+            List<Player> roster = cs.roster.stream().map(p -> {
+                String name = shortest.get(p.id());
+                return name.equals(p.name()) ? p : new Player(p.id(), name, p.nation(), p.positions(), p.overall(), p.dob());
+            }).toList();
+            return new ClubSeason(cs.club, cs.season, cs.league, roster);
         }).toList();
     }
 
