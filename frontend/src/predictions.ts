@@ -18,7 +18,12 @@ export interface Scenario {
   finalDay: boolean  // always prompts, ignores cooldown
 }
 
-const surname = (n: string) => n.trim().split(/\s+/).pop() ?? n
+/** Drop a leading initial ("K. De Bruyne" → "De Bruyne", "H. Kane" → "Kane", "Cristiano Ronaldo" unchanged). */
+export function lastName(n: string): string {
+  const parts = n.trim().split(/\s+/)
+  if (parts.length > 1 && /^[A-Z]\.?$/.test(parts[0])) parts.shift()
+  return parts.join(' ')
+}
 const shortClub = (n: string) => n.replace(/\s+\d{2,4}\/\d{2}.*$/, '').trim()
 
 type Res = 'W' | 'D' | 'L'
@@ -65,35 +70,45 @@ function resultOpts(um: UserMatch): PredictOption[] {
 function yesno(yes: string, no: string, yesCorrect: boolean): PredictOption[] {
   return [{ key: 'Y', label: yes, correct: yesCorrect }, { key: 'N', label: no, correct: !yesCorrect }]
 }
+const outcome = (s: string): Res => { const [h, a] = s.split('-').map(Number); return h > a ? 'W' : h < a ? 'L' : 'D' }
+/** Four scorelines (user goals first) that always span win, draw AND loss — so it's a real guess. */
 function scorelineOpts(gf: number, ga: number, seed: number): PredictOption[] {
   const actual = `${gf}-${ga}`
-  const pool = ['1-0', '2-0', '2-1', '1-1', '0-0', '0-1', '1-2', '3-1', '3-0']
+  const byOutcome: Record<Res, string[]> = {
+    W: ['1-0', '2-1', '2-0', '3-1'],
+    D: ['1-1', '0-0', '2-2'],
+    L: ['0-1', '1-2', '0-2'],
+  }
   const keys = new Set<string>([actual])
-  let i = Math.abs(seed) + 1
+  const add = (arr: string[]) => { for (let i = 0; i < arr.length; i++) { const c = arr[(seed + i) % arr.length]; if (!keys.has(c)) { keys.add(c); return } } }
+  for (const r of ['W', 'D', 'L'] as Res[]) if (![...keys].some((s) => outcome(s) === r)) add(byOutcome[r]) // guarantee a spread
+  const pool = [...byOutcome.W, ...byOutcome.D, ...byOutcome.L]
+  let i = seed
   while (keys.size < 4) { keys.add(pool[i % pool.length]); i++ }
   return [...keys].slice(0, 4)
-    .sort((a, b) => {
-      const [ah, aa] = a.split('-').map(Number), [bh, ba] = b.split('-').map(Number)
-      return (ah + aa) - (bh + ba) || ah - bh
-    })
+    .sort((a, b) => { const [ah, aa] = a.split('-').map(Number), [bh, ba] = b.split('-').map(Number); return (ah + aa) - (bh + ba) || ah - bh })
     .map((s) => ({ key: s, label: s.replace('-', '–'), correct: s === actual }))
 }
+/** Three candidates for who opens the user's scoring — the real first scorer + two other attackers. */
 function scorerOpts(replay: SeasonReplay, um: UserMatch, md: number): PredictOption[] {
   const first = um.m.goals.filter((g) => g.home === um.home).sort((a, b) => a.minute - b.minute)[0]?.scorer ?? ''
   const xi = replay.debrief.table.find((t) => t.you)?.players ?? []
   const cands = xi.filter((p) => p.line === 'ATT' || p.line === 'MID').map((p) => p.name)
   const uniq: string[] = []
-  for (const n of [first, ...cands]) { if (n && !uniq.includes(n)) uniq.push(n); if (uniq.length >= 4) break }
-  const arr = uniq.slice(0, 4)
-  for (let i = arr.length - 1; i > 0; i--) { const j = (md * 7 + i * 13) % (i + 1);[arr[i], arr[j]] = [arr[j], arr[i]] }
-  return arr.map((n) => ({ key: n, label: surname(n), correct: n === first }))
+  for (const n of [first, ...cands]) { if (n && !uniq.includes(n)) uniq.push(n); if (uniq.length >= 3) break }
+  for (let i = uniq.length - 1; i > 0; i--) { const j = (md * 7 + i * 13) % (i + 1);[uniq[i], uniq[j]] = [uniq[j], uniq[i]] }
+  return uniq.map((n) => ({ key: n, label: lastName(n), correct: n === first }))
 }
 const finalHeadline = (pos: number) =>
   pos === 1 ? 'Win and you are champions.' : pos > 0 && pos <= 4 ? 'A top-four place rests on this.'
     : pos >= 18 ? 'Survival is on the line.' : 'The final day — finish in style.'
 
-/** The scenario for the user's match this matchday, or null if it's an ordinary game. Priority = most salient first. */
-export function detectScenario(replay: SeasonReplay, md: number): Scenario | null {
+/**
+ * The scenario for the user's match this matchday, or null if it's an ordinary game. Candidates are gathered in
+ * priority order; we return the highest-priority one whose tag isn't in {@code recentTags} (so the same kind of
+ * prompt doesn't repeat back-to-back). The final day always fires.
+ */
+export function detectScenario(replay: SeasonReplay, md: number, recentTags: string[] = []): Scenario | null {
   const total = replay.matchdays.length
   const you = userName(replay)
   const um = findUserMatch(replay.matchdays[md], you)
@@ -116,28 +131,32 @@ export function detectScenario(replay: SeasonReplay, md: number): Scenario | nul
 
   if (md === total - 1)
     return base('Final Day', finalHeadline(userPos), 'How does the finale go?', 'result', resultOpts(um))
+
+  const cands: Scenario[] = []
   if (pre && md >= total - 6 && userPos === 1 && pre[1] && userPts - pre[1].points >= 6)
-    return base('The Clincher', `Win and the title is all but sealed.`, 'Do you get it done?', 'yesno', yesno('We win it', 'We slip', um.res === 'W'))
+    cands.push(base('The Clincher', `Win and the title is all but sealed.`, 'Do you get it done?', 'yesno', yesno('We win it', 'We slip', um.res === 'W')))
   if (late && userPos >= 1 && userPos <= 2 && oppPos >= 1 && oppPos <= 2)
-    return base('Summit Clash', `First plays second — ${opp} stand in your way.`, 'Call the score (your goals first):', 'scoreline', scorelineOpts(um.gf, um.ga, md))
+    cands.push(base('Summit Clash', `First plays second — ${opp} stand in your way.`, 'Call the score (your goals first):', 'scoreline', scorelineOpts(um.gf, um.ga, md)))
   if (totalLosses === 0 && md >= 24)
-    return base('Invincible Watch', `${md} unbeaten. Immortality is on.`, 'Still unbeaten after this?', 'yesno', yesno('Yes — unbeaten', 'No — it ends', um.res !== 'L'))
+    cands.push(base('Invincible Watch', `${md} unbeaten. Immortality is on.`, 'Still unbeaten after this?', 'yesno', yesno('Yes — unbeaten', 'No — it ends', um.res !== 'L')))
   if (unbeaten >= 8 && oppPos > 0 && oppPos <= 8)
-    return base('The Run on the Line', `${unbeaten} unbeaten, and a real test in ${opp}.`, 'Does the run survive?', 'yesno', yesno('It survives', 'It ends', um.res !== 'L'))
+    cands.push(base('The Run on the Line', `${unbeaten} unbeaten, and a real test in ${opp}.`, 'Does the run survive?', 'yesno', yesno('It survives', 'It ends', um.res !== 'L')))
   if (late && pre && userPos <= 6 && oppPos > 0 && oppPos <= 6 && Math.abs(userPts - oppPts) <= 4)
-    return base('Six-Pointer', `A huge one in the race with ${opp}.`, 'How does it go?', 'result', resultOpts(um))
+    cands.push(base('Six-Pointer', `A huge one in the race with ${opp}.`, 'How does it go?', 'result', resultOpts(um)))
   if (late && pre && userPos >= 15 && oppPos >= 15)
-    return base('Relegation Six-Pointer', `A scrap for survival with ${opp}.`, 'How does it go?', 'result', resultOpts(um))
+    cands.push(base('Relegation Six-Pointer', `A scrap for survival with ${opp}.`, 'How does it go?', 'result', resultOpts(um)))
   if (late && pre && userPos >= 12 && oppPos > 0 && oppPos <= 4)
-    return base('Giant-Killing', `${opp} sit near the top. Your shot at a scalp.`, 'Cause an upset?', 'yesno', yesno('We shock them', 'No upset', um.res === 'W'))
+    cands.push(base('Giant-Killing', `${opp} sit near the top. Your shot at a scalp.`, 'Cause an upset?', 'yesno', yesno('We shock them', 'No upset', um.res === 'W')))
   if (late && pre && userPos > 0 && userPos <= 6 && oppPos >= 14 && !um.home)
-    return base('Banana Skin', `A tricky trip to struggling ${opp}.`, 'Avoid the slip-up?', 'yesno', yesno('We handle it', 'We slip up', um.res !== 'L'))
-  const tal = talisman(prior)
-  if (tal && tal.goals >= 6 && um.gf >= 1)
-    return base('Talisman', `${surname(tal.name)} has ${tal.goals} this season.`, 'Who opens the scoring for you?', 'scorer', scorerOpts(replay, um, md))
+    cands.push(base('Banana Skin', `A tricky trip to struggling ${opp}.`, 'Avoid the slip-up?', 'yesno', yesno('We handle it', 'We slip up', um.res !== 'L')))
   if (wins >= 5)
-    return base('On a Roll', `${wins} straight wins.`, `Make it ${wins + 1}?`, 'yesno', yesno('Win again', 'Streak ends', um.res === 'W'))
+    cands.push(base('On a Roll', `${wins} straight wins.`, `Make it ${wins + 1}?`, 'yesno', yesno('Win again', 'Streak ends', um.res === 'W')))
   if (losses >= 3)
-    return base('Stop the Rot', `${losses} defeats on the spin.`, 'End the slide?', 'yesno', yesno('We respond', 'More misery', um.res !== 'L'))
-  return null
+    cands.push(base('Stop the Rot', `${losses} defeats on the spin.`, 'End the slide?', 'yesno', yesno('We respond', 'More misery', um.res !== 'L')))
+  const tal = talisman(prior)
+  if (tal && tal.goals >= 8 && um.gf >= 1)
+    cands.push(base('Talisman', `${lastName(tal.name)} has ${tal.goals} this season.`, 'Who opens the scoring for you?', 'scorer', scorerOpts(replay, um, md)))
+
+  if (!cands.length) return null
+  return cands.find((c) => !recentTags.includes(c.tag)) ?? cands[0]
 }

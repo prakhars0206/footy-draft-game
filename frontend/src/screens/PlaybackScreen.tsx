@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { MatchResult, SeasonReplay } from '../api'
 import { Panel, Stamp } from '../components/primitives'
-import { detectScenario } from '../predictions'
+import { detectScenario, lastName } from '../predictions'
 import type { Scenario } from '../predictions'
 
 const BASE_MS = 1100 // matchday advance interval at 1x
-const PREDICT_COOLDOWN = 4 // min matchdays between prediction prompts (the final day always asks). Tune for frequency.
+const PREDICT_COOLDOWN = 6 // min matchdays between prediction prompts (the final day always asks). Tune for frequency.
 
-// Drop the trailing season so a next-fixture label fits ("Real Madrid CF 2018/19" -> "Real Madrid CF").
 const shortClub = (n: string) => n.replace(/\s+\d{2,4}\/\d{2}$/, '').trim()
 
 export interface Pundit { correct: number; total: number }
@@ -21,18 +20,24 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   const [results, setResults] = useState<Record<number, boolean>>({}) // md -> called it right?
   const [prediction, setPrediction] = useState<Scenario | null>(null)
   const [pick, setPick] = useState<string | null>(null)
+  const recentTags = useRef<string[]>([])
   const atEnd = md >= total - 1
 
   const pundit: Pundit = { correct: Object.values(results).filter(Boolean).length, total: Object.keys(results).length }
-  const scenario = useMemo(() => detectScenario(replay, md), [replay, md])
 
-  // A "moment" on this matchday → pause and ask the user to call it (cooldown of 3 MDs; the final day always asks).
+  // A "moment" in this matchday's fixture → pause and ask the user to call it. Skips a scenario type used in the
+  // last few prompts (variety), and rate-limits by PREDICT_COOLDOWN; the final day always asks.
   useEffect(() => {
-    if (prediction || results[md] !== undefined || !scenario) return
+    if (prediction || results[md] !== undefined) return
+    const sc = detectScenario(replay, md, recentTags.current)
+    if (!sc) return
     const answered = Object.keys(results).map(Number)
     const lastAsked = answered.length ? Math.max(...answered) : -99
-    if (scenario.finalDay || md - lastAsked >= PREDICT_COOLDOWN) { setPrediction(scenario); setPick(null); setPlaying(false) }
-  }, [md, scenario, prediction, results])
+    if (sc.finalDay || md - lastAsked >= PREDICT_COOLDOWN) {
+      setPrediction(sc); setPick(null); setPlaying(false)
+      recentTags.current = [sc.tag, ...recentTags.current].slice(0, 3)
+    }
+  }, [md, prediction, results, replay])
 
   // Auto-advance while playing (never through a pending prediction).
   useEffect(() => {
@@ -59,12 +64,16 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   const day = replay.matchdays[md]
   const matches = [...day.matches].sort((a, b) => Number(b.userMatch) - Number(a.userMatch))
   const userMatch = day.matches.find((m) => m.userMatch)
+  const predicting = !!(prediction && userMatch)
 
-  // Movement vs the previous matchday's table (▲/▼ next to the rank).
+  // While predicting we show the PRE-match standings (so the table doesn't leak the result) and highlight the
+  // fixture's two teams; otherwise the live (post-matchday) table with movement + next fixtures.
+  const userTeam = day.table.find((r) => r.you)?.team ?? ''
+  const oppTeam = predicting && userMatch ? (userMatch.home === userTeam ? userMatch.away : userMatch.home) : ''
+  const rows = predicting ? (replay.matchdays[md - 1]?.table ?? day.table) : day.table
+
   const prevRank = new Map<string, number>()
   if (md > 0) replay.matchdays[md - 1].table.forEach((r, i) => prevRank.set(r.team, i))
-
-  // Each team's NEXT fixture (from the upcoming matchday) so you can see what's coming as the season rolls.
   const nextFixture = new Map<string, { opp: string; home: boolean }>()
   if (md < total - 1) for (const m of replay.matchdays[md + 1].matches) {
     nextFixture.set(m.home, { opp: m.away, home: true })
@@ -93,46 +102,49 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
         )}
       </div>
 
-      {prediction && userMatch ? (
-        <PredictionView
-          scenario={prediction} mdNumber={day.number} userMatch={userMatch} pick={pick}
-          onPick={(opt) => { setPick(opt.key); setResults((r) => ({ ...r, [md]: opt.correct })) }}
-          onContinue={() => { setPrediction(null); setPick(null) }}
-        />
-      ) : (
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_minmax(360px,440px)]">
-          {/* live table */}
-          <Panel label="The Table · live" className="flex min-h-0 flex-col p-4">
-            <div className="mb-1 flex shrink-0 items-center gap-2 px-2 text-[10px] tracking-widest text-ink/40">
-              <span className="w-9" /><span className="flex-1">CLUB</span><span className="hidden w-28 text-right sm:inline">NEXT</span><span className="w-8 text-right">P</span><span className="w-9 text-right">GD</span><span className="w-8 text-right">PTS</span>
-            </div>
-            <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-              {day.table.map((r, i) => {
-                const prev = prevRank.get(r.team)
-                const delta = prev === undefined ? 0 : prev - i // >0 climbed, <0 dropped
-                const nf = nextFixture.get(r.team)
-                return (
-                <motion.div
-                  layout key={r.team} transition={{ type: 'spring', stiffness: 600, damping: 44 }}
-                  className={`flex items-center gap-2 px-2 py-1 text-sm ${r.you ? 'border border-amber/60 bg-amber/10 text-amber' : 'border border-transparent text-ink/75'}`}
-                >
-                  <span className="flex w-9 items-center justify-end gap-0.5 tabular-nums text-ink/50">
-                    {i + 1}
-                    {delta > 0 && <span className="text-phosphor text-[10px]">▲</span>}
-                    {delta < 0 && <span className="text-danger text-[10px]">▼</span>}
-                  </span>
-                  <span className="flex-1 truncate font-bold">{r.team}</span>
-                  <span className="hidden w-28 truncate text-right text-[10px] text-ink/35 sm:inline">{nf ? `${nf.home ? 'v' : '@'} ${shortClub(nf.opp)}` : '—'}</span>
-                  <span className="w-8 text-right tabular-nums text-ink/45">{r.played}</span>
-                  <span className="w-9 text-right tabular-nums">{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
-                  <span className="w-8 text-right font-bold tabular-nums">{r.points}</span>
-                </motion.div>
-                )
-              })}
-            </div>
-          </Panel>
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_minmax(360px,440px)]">
+        {/* standings (pre-match while predicting, live otherwise) */}
+        <Panel label={predicting ? 'Standings · before kickoff' : 'The Table · live'} className="flex min-h-0 flex-col p-4">
+          <div className="mb-1 flex shrink-0 items-center gap-2 px-2 text-[10px] tracking-widest text-ink/40">
+            <span className="w-9" /><span className="flex-1">CLUB</span>
+            {!predicting && <span className="hidden w-28 text-right sm:inline">NEXT</span>}
+            <span className="w-8 text-right">P</span><span className="w-9 text-right">GD</span><span className="w-8 text-right">PTS</span>
+          </div>
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
+            {rows.map((r, i) => {
+              const prev = predicting ? undefined : prevRank.get(r.team)
+              const delta = prev === undefined ? 0 : prev - i
+              const nf = predicting ? undefined : nextFixture.get(r.team)
+              const isOpp = predicting && r.team === oppTeam
+              return (
+              <motion.div
+                layout key={r.team} transition={{ type: 'spring', stiffness: 600, damping: 44 }}
+                className={`flex items-center gap-2 px-2 py-1 text-sm ${r.you ? 'border border-amber/60 bg-amber/10 text-amber' : isOpp ? 'border border-edge-bright bg-panel-2 text-ink-bright' : 'border border-transparent text-ink/75'}`}
+              >
+                <span className="flex w-9 items-center justify-end gap-0.5 tabular-nums text-ink/50">
+                  {i + 1}
+                  {delta > 0 && <span className="text-phosphor text-[10px]">▲</span>}
+                  {delta < 0 && <span className="text-danger text-[10px]">▼</span>}
+                </span>
+                <span className="flex-1 truncate font-bold">{r.team}</span>
+                {!predicting && <span className="hidden w-28 truncate text-right text-[10px] text-ink/35 sm:inline">{nf ? `${nf.home ? 'v' : '@'} ${shortClub(nf.opp)}` : '—'}</span>}
+                <span className="w-8 text-right tabular-nums text-ink/45">{r.played}</span>
+                <span className="w-9 text-right tabular-nums">{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
+                <span className="w-8 text-right font-bold tabular-nums">{r.points}</span>
+              </motion.div>
+              )
+            })}
+          </div>
+        </Panel>
 
-          {/* matchday results */}
+        {/* right column: the prediction prompt, or the matchday results */}
+        {predicting && userMatch ? (
+          <PredictionView
+            scenario={prediction!} mdNumber={day.number} userMatch={userMatch} pick={pick}
+            onPick={(opt) => { setPick(opt.key); setResults((r) => ({ ...r, [md]: opt.correct })) }}
+            onContinue={() => { setPrediction(null); setPick(null) }}
+          />
+        ) : (
           <Panel label={`Matchday ${day.number} · results`} className="flex min-h-0 flex-col p-4">
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
               {matches.map((m, i) => <MatchCard key={i} m={m} verdict={m.userMatch ? results[md] : undefined} />)}
@@ -147,8 +159,8 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
               </motion.button>
             )}
           </Panel>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="shrink-0 text-center text-[10px] text-ink/35">
         SPACE play/pause · ◀ ▶ step matchday · F speed · S skip · ▲▼ vs last MD · big moments pause to be called
@@ -167,31 +179,29 @@ function PredictionView({
   const uga = scenario.home ? userMatch.awayGoals : userMatch.homeGoals
   const picked = pick ? scenario.options.find((o) => o.key === pick) : null
   const right = picked?.correct
-  const surname = (n: string) => n.trim().split(/\s+/).pop() ?? n
-  const userScorers = userMatch.goals.filter((g) => g.home === scenario.home).map((g) => `${surname(g.scorer)} ${g.minute}'`)
+  const userScorers = userMatch.goals.filter((g) => g.home === scenario.home).map((g) => `${lastName(g.scorer)} ${g.minute}'`)
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="flex min-h-0 flex-1 flex-col items-center justify-center">
-      <Panel accent="amber" className="w-full max-w-xl p-7 text-center">
-        <div className="flex items-center justify-center gap-2"><Stamp text={scenario.tag} tone="amber" /></div>
-        <div className="mt-3 font-display text-2xl font-semibold leading-snug text-ink-bright">{scenario.headline}</div>
+    <Panel accent="amber" className="flex min-h-0 flex-col p-5">
+      <div className="shrink-0 text-center"><Stamp text={scenario.tag} tone="amber" /></div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
+        <div className="font-display text-2xl font-semibold leading-snug text-ink-bright">{scenario.headline}</div>
         <div className="mt-1 text-[12px] text-ink/50">Matchday {mdNumber} · you {scenario.home ? 'vs' : '@'} {scenario.vs}</div>
 
         {!picked ? (
-          <>
-            <div className="mt-5 font-display text-[15px] italic text-amber">{scenario.question}</div>
-            <div className={`mx-auto mt-3 grid max-w-md gap-2 ${scenario.options.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          <div className="mt-5 w-full max-w-xs">
+            <div className="font-display text-[15px] italic text-amber">{scenario.question}</div>
+            <div className="mt-3 space-y-2">
               {scenario.options.map((o) => (
                 <button
                   key={o.key} onClick={() => onPick(o)}
-                  className="border border-edge px-3 py-3 text-sm font-semibold text-ink-bright transition hover:border-amber hover:bg-amber/10 hover:text-amber"
+                  className="w-full border border-edge px-3 py-2.5 text-sm font-semibold text-ink-bright transition hover:border-amber hover:bg-amber/10 hover:text-amber"
                 >
                   {o.label}
                 </button>
               ))}
             </div>
-          </>
+          </div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-5">
             <div className={`font-display text-3xl font-black ${right ? 'text-phosphor' : 'text-danger'}`}>
@@ -200,21 +210,20 @@ function PredictionView({
             <div className="mt-2 text-sm text-ink/70">
               You said <span className="font-semibold text-ink-bright">{picked.label}</span> ·
               {' '}final <span className="font-bold tabular-nums text-amber">{ugf}–{uga}</span>
-              {userScorers.length > 0 && <span className="text-ink/45"> ({userScorers.join(', ')})</span>}
             </div>
+            {userScorers.length > 0 && <div className="mt-1 text-[11px] text-ink/45">{userScorers.join(' · ')}</div>}
             <button onClick={onContinue}
               className="mt-6 border-2 border-phosphor bg-phosphor/10 px-6 py-2.5 text-sm font-bold uppercase tracking-[0.18em] text-phosphor transition hover:bg-phosphor/20">
               Continue ▸
             </button>
           </motion.div>
         )}
-      </Panel>
-    </motion.div>
+      </div>
+    </Panel>
   )
 }
 
 function MatchCard({ m, verdict }: { m: MatchResult; verdict?: boolean }) {
-  const surname = (n: string) => n.trim().split(/\s+/).pop() ?? n
   const homeGoals = m.goals.filter((g) => g.home)
   const awayGoals = m.goals.filter((g) => !g.home)
   return (
@@ -232,9 +241,9 @@ function MatchCard({ m, verdict }: { m: MatchResult; verdict?: boolean }) {
       </div>
       {m.goals.length > 0 && (
         <div className="mt-1 flex justify-between gap-2 text-[10px] text-ink/50">
-          <span className="flex-1 truncate text-right">{homeGoals.map((g) => `${surname(g.scorer)} ${g.minute}'`).join(' · ')}</span>
+          <span className="flex-1 truncate text-right">{homeGoals.map((g) => `${lastName(g.scorer)} ${g.minute}'`).join(' · ')}</span>
           <span className="text-ink/25">⚽</span>
-          <span className="flex-1 truncate">{awayGoals.map((g) => `${surname(g.scorer)} ${g.minute}'`).join(' · ')}</span>
+          <span className="flex-1 truncate">{awayGoals.map((g) => `${lastName(g.scorer)} ${g.minute}'`).join(' · ')}</span>
         </div>
       )}
     </div>
