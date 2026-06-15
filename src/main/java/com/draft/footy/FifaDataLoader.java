@@ -79,6 +79,19 @@ public final class FifaDataLoader {
         return Integer.parseInt(dot >= 0 ? s.substring(0, dot) : s);
     }
 
+    private static int max(int... xs) {
+        int m = Integer.MIN_VALUE;
+        for (int x : xs) m = Math.max(m, x);
+        return m;
+    }
+
+    /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
+    private static String cleanName(String s) {
+        s = s.trim();
+        while (s.endsWith("-")) s = s.substring(0, s.length() - 1).trim();
+        return s;
+    }
+
     private static final Set<Integer> TOP5_IDS =
         TOP5.stream().map(League::id).collect(Collectors.toSet());
     private static final Set<String> TOP5_NAMES =
@@ -113,6 +126,18 @@ public final class FifaDataLoader {
         return load(csv, fifaEdition);
     }
 
+    /**
+     * Load one edition, auto-detecting the schema: the EA "ratings export" (an {@code OVR} column) goes through
+     * {@link #loadModern}, otherwise it's a sofifa-schema file (e.g. fc_25_sofifa.csv — {@code player_id} +
+     * {@code overall_rating} + {@code club_league_id}) loaded at the given fixed edition.
+     */
+    public static List<ClubSeason> loadEdition(Path csv, int edition) throws IOException {
+        try (BufferedReader r = Files.newBufferedReader(csv)) {
+            for (String c : splitCsv(r.readLine())) if (c.trim().equals("OVR")) return loadModern(csv, edition);
+        }
+        return load(csv, edition);
+    }
+
     private static List<ClubSeason> load(Path csv, int defaultEdition) throws IOException {
         // Key = club + season so the same club in different editions is a distinct ClubSeason (the spin pool).
         Map<String, List<Player>> byKey = new LinkedHashMap<>();
@@ -120,25 +145,28 @@ public final class FifaDataLoader {
 
         try (BufferedReader r = Files.newBufferedReader(csv)) {
             String[] header = splitCsv(r.readLine());
+            // Column aliases span three sofifa variants: old combined export (short_name/player_positions/overall/
+            // league_name/league_level), legacy single-season, and the newer fc_25_sofifa dump (name/positions/
+            // overall_rating/club_league_name/club_league_id, no league_level).
             int iId      = idx(header, true,  "player_id", "sofifa_id");
-            int iName    = idx(header, true,  "short_name");
-            int iPos     = idx(header, true,  "player_positions");
-            int iOverall = idx(header, true,  "overall");
+            int iName    = idx(header, true,  "short_name", "name");
+            int iPos     = idx(header, true,  "player_positions", "positions");
+            int iOverall = idx(header, true,  "overall", "overall_rating");
             int iClub    = idx(header, true,  "club_name", "club");
-            int iNation  = idx(header, true,  "nationality_name", "nationality");
-            int iLeagueN = idx(header, true,  "league_name");
-            int iLevel   = idx(header, true,  "league_level");
-            int iLeagueId = idx(header, false, "league_id");      // combined file only
-            int iVersion  = idx(header, false, "fifa_version");   // combined file only
+            int iNation  = idx(header, true,  "nationality_name", "nationality", "country_name");
+            int iLeagueN = idx(header, true,  "league_name", "club_league_name");
+            int iLevel   = idx(header, false, "league_level");                  // absent in the fc_25_sofifa dump
+            int iLeagueId = idx(header, false, "league_id", "club_league_id");
+            int iVersion  = idx(header, false, "fifa_version");   // combined file only ("version" dates are NOT this)
             int iDob      = idx(header, false, "dob");
 
-            int maxNeeded = Math.max(Math.max(iLeagueN, iLevel), Math.max(iClub, iOverall));
+            int maxNeeded = max(iId, iName, iPos, iOverall, iClub, iNation, iLeagueN, iLevel, iLeagueId, iVersion);
 
             String line;
             while ((line = r.readLine()) != null) {
                 String[] f = splitCsv(line);
                 if (f.length <= maxNeeded) continue;
-                if (!"1".equals(f[iLevel].trim())) continue;
+                if (iLevel >= 0 && !"1".equals(f[iLevel].trim())) continue;    // skip lower tiers when level is given
                 if (!isTop5(f, iLeagueId, iLeagueN)) continue;
                 try {
                     int edition = iVersion >= 0 ? parseIntLoose(f[iVersion]) : defaultEdition;
@@ -148,8 +176,8 @@ public final class FifaDataLoader {
                     List<String> positions = Arrays.stream(f[iPos].split(","))
                         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
-                    Player p = new Player(Integer.parseInt(f[iId].trim()), f[iName], f[iNation],
-                        positions, Integer.parseInt(f[iOverall].trim()), dob);
+                    Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), f[iNation],
+                        positions, parseIntLoose(f[iOverall]), dob);
 
                     String club = f[iClub];
                     String key = club + "|" + season;
@@ -224,11 +252,16 @@ public final class FifaDataLoader {
     /** Group accumulated players into club-seasons, keeping only those that can field an XI (>=11). */
     private static List<ClubSeason> group(Map<String, List<Player>> byKey, Map<String, String[]> keyMeta) {
         List<ClubSeason> out = new ArrayList<>();
-        for (var e : byKey.entrySet())
-            if (e.getValue().size() >= 11) {
+        for (var e : byKey.entrySet()) {
+            // Dedup by player id within a squad — some exports list a player twice, which would otherwise field
+            // them in two XI slots. Same id at the same club = same player; keep the higher-rated row.
+            Map<Integer, Player> uniq = new LinkedHashMap<>();
+            for (Player p : e.getValue()) uniq.merge(p.id(), p, (a, b) -> b.overall() > a.overall() ? b : a);
+            if (uniq.size() >= 11) {
                 String[] m = keyMeta.get(e.getKey());
-                out.add(new ClubSeason(m[0], m[1], m[2], e.getValue()));
+                out.add(new ClubSeason(m[0], m[1], m[2], new ArrayList<>(uniq.values())));
             }
+        }
         return out;
     }
 

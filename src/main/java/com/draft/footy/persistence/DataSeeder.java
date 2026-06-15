@@ -33,7 +33,7 @@ public class DataSeeder {
     // Comma-separated data sources, earlier wins overlapping seasons. A bare path = sofifa multi-edition export;
     // `path:NN` = the newer EA-FC "ratings export" schema for edition NN. male_players_all (clean 15–23) leads;
     // fc_24 (a messier export, only used for its unique edition 24) follows; then the modern FC 25/26 files.
-    @Value("${footy.data.csv:data/male_players_all.csv,data/fc_24.csv,data/fc_25.csv:25,data/EAFC26-Men.csv:26}")
+    @Value("${footy.data.csv:data/male_players_all.csv,data/fc_24.csv,data/fc_25_sofifa.csv:25,data/EAFC26-Men.csv:26}")
     private String csvPaths;
 
     private final ClubSeasonRepository repo;
@@ -57,7 +57,7 @@ public class DataSeeder {
                 catch (NumberFormatException ignore) { }
             }
             if (!Files.exists(path)) { log.warn("data source not found, skipping: {}", path); continue; }
-            List<ClubSeason> part = edition >= 0 ? FifaDataLoader.loadModern(path, edition)
+            List<ClubSeason> part = edition >= 0 ? FifaDataLoader.loadEdition(path, edition)
                                                  : FifaDataLoader.loadAllSeasons(path);
             // Dedup by season: a multi-edition export (fc_24) overlaps an earlier one (male_players_all 15–23),
             // so we keep only the seasons not yet provided — letting the cleaner/earlier file own them.
