@@ -6,14 +6,16 @@ export function TeamPitch({
   formation,
   players,
   showStats = false,
+  fill = false,
 }: {
   formation: string
   players: XiSlot[]
   showStats?: boolean
+  fill?: boolean // fill the parent's height (a bigger pitch) instead of capping at a small card width
 }) {
   const coords = PITCH[formation] ?? PITCH['4-3-3']
   return (
-    <div className="relative mx-auto aspect-[7/10] w-full max-w-sm overflow-hidden border border-edge bg-gradient-to-b from-[#1a1d16] to-[#12120d]">
+    <div className={`relative mx-auto aspect-[7/10] overflow-hidden border border-edge bg-gradient-to-b from-[#1a1d16] to-[#12120d] ${fill ? 'h-full max-h-full' : 'w-full max-w-sm'}`}>
       <div className="pointer-events-none absolute inset-0 opacity-50">
         <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-ink/15" />
         <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink/15" />

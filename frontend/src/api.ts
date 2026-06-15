@@ -100,6 +100,8 @@ export interface LeagueTeam {
   xi: XiSlot[]
   projectedPoints: number
   projectedPos: number
+  monteCarlo: MonteCarlo
+  you: boolean
 }
 export interface MonteCarlo {
   sims: number

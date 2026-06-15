@@ -30,6 +30,13 @@ public final class SeasonViewMapper {
                                  double title, double top4, double top6, double relegation, double unbeaten, double perfect,
                                  int histMin, int histBinWidth, int[] histogram, Integer percentile) { }
 
+    /** Map a single team's cloud to the view (per-team odds + distribution; no perfect/percentile per opponent). */
+    public static MonteCarloView cloudView(MonteCarlo.TeamCloud c, int sims) {
+        return new MonteCarloView(sims, c.mean(), c.min(), c.p5(), c.p25(), c.median(), c.p75(), c.p95(), c.max(),
+            c.title(), c.top4(), c.top6(), c.relegation(), c.unbeaten(), 0.0,
+            c.histMin(), c.histBinWidth(), c.histogram(), null);
+    }
+
     public static MonteCarloView mcView(MonteCarlo.Outcome o, Integer percentile) {
         if (o == null) return null;
         return new MonteCarloView(o.sims(), o.meanPoints(), o.min(), o.p5(), o.p25(), o.median(), o.p75(), o.p95(), o.max(),
@@ -70,7 +77,7 @@ public final class SeasonViewMapper {
         Map<Xi, Integer> projPos = new HashMap<>();
         if (mc != null) {
             for (var st : res.table()) {
-                var tp = mc.teamProjections().get(st.team);
+                var tp = mc.teamClouds().get(st.team);
                 projPoints.put(st.team, tp.projectedPoints());
                 projPos.put(st.team, tp.projectedPos());
             }
@@ -105,7 +112,7 @@ public final class SeasonViewMapper {
         // curve, matching whatever the pre-sim panel showed.
         OddsView oddsView;
         if (mc != null) {
-            var userTp = mc.teamProjections().get(userXi);
+            var userTp = mc.teamClouds().get(userXi);
             oddsView = new OddsView(userTp.projectedPoints(), mc.titleOdds(), mc.top4Odds(), mc.relegationOdds());
         } else {
             int userMeanOthers = (int) Math.round((totalOverall - userXi.overall()) / (double) (n - 1));

@@ -46,7 +46,7 @@ export function DraftScreen({
   const [declassified, setDeclassified] = useState<{ club: string; season: string; players: DeclassifiedPlayer[] } | null>(null)
   const [revealing, setRevealing] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
-  const [inspect, setInspect] = useState<LeagueTeam | null>(null)
+  const [selectedTeam, setSelectedTeam] = useState<LeagueTeam | null>(null)
 
   const complete = run.slotsRemaining === 0
   const openSlots = run.slots.filter((s) => !s.filled)
@@ -54,6 +54,10 @@ export function DraftScreen({
   useEffect(() => {
     if (complete && !preview && !declassified) api.preview(run.runId).then(setPreview).catch(() => {})
   }, [complete, preview, declassified, run.runId])
+  // Default the inspected team to your own XI once the league loads.
+  useEffect(() => {
+    if (preview && !selectedTeam) setSelectedTeam(preview.league.find((t) => t.you) ?? preview.league[0] ?? null)
+  }, [preview, selectedTeam])
 
   let interactive: Set<number> | undefined
   if (selected) {
@@ -114,8 +118,20 @@ export function DraftScreen({
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_minmax(440px,520px)]">
-        <Panel className="min-h-0 p-2">
-          <PitchView formation={run.formation} slots={run.slots} interactive={interactive} selectedIndex={moveFrom} onSlotClick={onPitchClick} />
+        <Panel className="flex min-h-0 flex-col p-2">
+          {complete && selectedTeam ? (
+            <>
+              <div className="mb-2 flex shrink-0 items-center justify-between gap-2 px-1">
+                <div className="min-w-0 truncate font-display text-base font-semibold text-ink-bright">
+                  {selectedTeam.team}{selectedTeam.you && <span className="text-amber"> · your XI</span>}
+                </div>
+                <span className={`shrink-0 border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${TIER_COLOR[selectedTeam.tier] ?? 'text-ink border-edge'}`}>{selectedTeam.tier} · {selectedTeam.strength}</span>
+              </div>
+              <div className="min-h-0 flex-1"><TeamPitch formation={selectedTeam.formation} players={selectedTeam.xi} fill /></div>
+            </>
+          ) : (
+            <PitchView formation={run.formation} slots={run.slots} interactive={interactive} selectedIndex={moveFrom} onSlotClick={onPitchClick} />
+          )}
         </Panel>
 
         <div className="flex min-h-0 flex-col">
@@ -127,7 +143,7 @@ export function DraftScreen({
               onNext={() => { setDeclassified(null); if (!complete) doSpin() }}
             />
           ) : complete ? (
-            <LeaguePanel preview={preview} busy={busy} onInspect={setInspect} onRun={() => guard(async () => onSimulated(await api.simulate(run.runId)))} />
+            <LeaguePanel preview={preview} selected={selectedTeam} busy={busy} onSelect={setSelectedTeam} onRun={() => guard(async () => onSimulated(await api.simulate(run.runId)))} />
           ) : !spin ? (
             <Panel label="The Spin" className="flex flex-1 flex-col items-center justify-center gap-5 p-8">
               <Prompt>spin for a tier, then choose your club</Prompt>
@@ -160,19 +176,6 @@ export function DraftScreen({
           )}
         </div>
       </div>
-
-      <AnimatePresence>
-        {inspect && (
-          <Backdrop onClose={() => setInspect(null)}>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="truncate font-display text-lg font-semibold text-ink-bright">{inspect.team}</div>
-              <span className={`shrink-0 border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${TIER_COLOR[inspect.tier] ?? 'text-ink border-edge'}`}>{inspect.tier} · {inspect.strength}</span>
-            </div>
-            <TeamPitch formation={inspect.formation} players={inspect.xi} />
-            <button onClick={() => setInspect(null)} className="mt-4 w-full border border-edge py-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70 hover:border-amber hover:text-amber">Close</button>
-          </Backdrop>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -225,24 +228,21 @@ function DeclassifiedPanel({
   )
 }
 
-function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | null; busy: boolean; onRun: () => void; onInspect: (t: LeagueTeam) => void }) {
-  const p = preview?.projection
-  const mc = preview?.monteCarlo
+function LeaguePanel({ preview, selected, busy, onSelect, onRun }: { preview: Preview | null; selected: LeagueTeam | null; busy: boolean; onSelect: (t: LeagueTeam) => void; onRun: () => void }) {
+  const mc = selected?.monteCarlo
   return (
     <Panel label="The League · pre-season" accent="amber" className="flex min-h-0 flex-1 flex-col p-4">
       <div className="shrink-0">
-        <div className="flex items-end justify-between">
-          <div>
-            <div className="eyebrow text-ink/50">Projected Finish</div>
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <div className="eyebrow text-ink/50">{selected?.you ? 'Your projected finish' : 'Projected finish'}</div>
             <div className="font-display text-5xl font-black leading-none text-amber">
-              {preview ? ordinal(preview.userProjectedPos) : '—'}
-              <span className="ml-1 font-sans text-sm font-normal not-italic text-ink/50">· {p?.expectedPoints ?? '—'} pts</span>
+              {selected ? ordinal(selected.projectedPos) : '—'}
+              <span className="ml-1 font-sans text-sm font-normal text-ink/50">· {selected?.projectedPoints ?? '—'} pts</span>
             </div>
+            {selected && <div className="mt-0.5 truncate text-[11px] text-ink/45">{selected.you ? 'your XI' : selected.team}</div>}
           </div>
-          <div className="text-right text-[10px] text-ink/50">
-            <span className="eyebrow">Your OVR</span> <span className="text-ink-bright">{preview?.userOverall ?? '—'}</span><br />
-            <span className="eyebrow">League Mean</span> <span className="text-ink-bright">{preview?.leagueMean ?? '—'}</span>
-          </div>
+          <span className={`shrink-0 border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${TIER_COLOR[selected?.tier ?? ''] ?? 'text-ink border-edge'}`}>{selected?.tier} · {selected?.strength}</span>
         </div>
         {mc && (
           <div className="mt-3">
@@ -251,27 +251,31 @@ function LeaguePanel({ preview, busy, onRun, onInspect }: { preview: Preview | n
               <span className="font-display italic">{mc.sims.toLocaleString()} simulated seasons</span> · likely <span className="tabular-nums text-ink-bright">{mc.p25}–{mc.p75}</span> pts
               {mc.unbeaten > 0 && <> · unbeaten <span className="tabular-nums text-phosphor">{pct(mc.unbeaten)}</span></>}
             </div>
+            <div className="mt-3 space-y-1.5">
+              <OddsRow label="Title" v={mc.title} />
+              <OddsRow label="Top 4" v={mc.top4} />
+              <OddsRow label="Relegation" v={mc.relegation} />
+            </div>
           </div>
         )}
-        <div className="mt-4 space-y-1.5">
-          <OddsRow label="Title" v={mc?.title ?? p?.winLeague ?? 0} />
-          <OddsRow label="Top 4" v={mc?.top4 ?? p?.top4 ?? 0} />
-          <OddsRow label="Relegation" v={mc?.relegation ?? p?.relegation ?? 0} />
-        </div>
         <div className="mt-4 mb-1 flex items-center gap-2 border-b border-edge pb-1">
-          <span className="eyebrow w-5 text-right text-ink/45">#</span><span className="eyebrow flex-1 text-ink/45">Opponents · tap to scout</span><span className="eyebrow w-11 text-right text-ink/45">Proj</span><span className="eyebrow w-7 text-right text-ink/45">OVR</span>
+          <span className="eyebrow w-5 text-right text-ink/45">#</span><span className="eyebrow flex-1 text-ink/45">League · tap a team</span><span className="eyebrow w-11 text-right text-ink/45">Proj</span><span className="eyebrow w-7 text-right text-ink/45">OVR</span>
         </div>
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {(preview?.league ?? []).map((t, i) => (
-          <button key={i} onClick={() => onInspect(t)} className="flex w-full items-center gap-2 border border-transparent px-2 py-1 text-left text-sm hover:border-edge-bright">
+        {(preview?.league ?? []).map((t, i) => {
+          const isSel = selected?.team === t.team
+          return (
+          <button key={i} onClick={() => onSelect(t)}
+            className={`flex w-full items-center gap-2 border px-2 py-1 text-left text-sm transition ${isSel ? 'border-amber bg-amber/10' : t.you ? 'border-amber/40 hover:border-amber/70' : 'border-transparent hover:border-edge-bright'}`}>
             <span className="w-5 text-right tabular-nums text-ink/40">{t.projectedPos}</span>
-            <span className="flex-1 truncate text-ink-bright">{t.team}</span>
+            <span className={`flex-1 truncate ${t.you ? 'font-semibold text-amber' : 'text-ink-bright'}`}>{t.team}{t.you && ' ★'}</span>
             <span className={`border px-1 text-[9px] uppercase tracking-[0.12em] ${TIER_COLOR[t.tier] ?? 'text-ink border-edge'}`}>{t.tier}</span>
             <span className="w-11 text-right text-[11px] tabular-nums text-ink/55">{t.projectedPoints} pt</span>
             <span className="w-7 text-right font-bold tabular-nums text-amber">{t.strength}</span>
           </button>
-        ))}
+          )
+        })}
         {!preview && <div className="p-4 text-center font-display text-sm italic text-ink/50">compiling the league dossier…</div>}
       </div>
       <motion.button
@@ -350,16 +354,6 @@ function SquadPanel({
         )}
       </AnimatePresence>
     </Panel>
-  )
-}
-
-function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-terminal/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="w-full max-w-lg border border-edge-bright bg-panel p-6" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
-        {children}
-      </motion.div>
-    </motion.div>
   )
 }
 

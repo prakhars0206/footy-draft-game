@@ -60,7 +60,8 @@ public class DraftRunController {
     public record XiSlotView(String position, String line, String name, int overall,
                              Integer goals, Integer assists, Integer cleanSheets) { }
     public record LeagueTeamView(String team, int strength, String tier, String formation, List<XiSlotView> xi,
-                                 int projectedPoints, int projectedPos) { }
+                                 int projectedPoints, int projectedPos, SeasonViewMapper.MonteCarloView monteCarlo,
+                                 boolean you) { }
     public record PreviewView(SeasonViewMapper.OddsView projection, int userOverall, int leagueMean,
                               int userProjectedPos, List<LeagueTeamView> league,
                               SeasonViewMapper.MonteCarloView monteCarlo) { }
@@ -106,16 +107,16 @@ public class DraftRunController {
     public PreviewView preview(@PathVariable String id) {
         var p = service.preview(id);
         var mc = p.monteCarlo();
-        var proj = mc.teamProjections();                                  // every team's "real bookies" projection
+        var clouds = mc.teamClouds();                                // every team's full "real bookies" cloud
+        Xi userXi = p.userXi();
 
-        // Per-opponent projected points + finish straight from the Monte-Carlo (mean points; rank by it).
-        List<LeagueTeamView> league = p.league().stream()
-            .map(xi -> { var tp = proj.get(xi); return toLeagueTeam(xi, tp.projectedPoints(), tp.projectedPos()); })
-            .sorted(Comparator.comparingInt(LeagueTeamView::projectedPos))
-            .toList();
+        // The whole league (you + 19 opponents), each carrying its squad + projection cloud, ranked by projection.
+        List<LeagueTeamView> league = new ArrayList<>();
+        for (Xi xi : p.league()) league.add(toLeagueTeam(xi, clouds.get(xi), mc.sims(), false));
+        league.add(toLeagueTeam(userXi, clouds.get(userXi), mc.sims(), true));
+        league = league.stream().sorted(Comparator.comparingInt(LeagueTeamView::projectedPos)).toList();
 
-        var userTp = proj.get(p.userXi());
-        // Odds + headline projected points are all Monte-Carlo now (the fitted curve is retired here).
+        var userTp = clouds.get(userXi);
         var odds = new SeasonViewMapper.OddsView(userTp.projectedPoints(), mc.titleOdds(), mc.top4Odds(), mc.relegationOdds());
         return new PreviewView(odds, p.userOverall(), p.leagueMean(), userTp.projectedPos(), league,
             SeasonViewMapper.mcView(mc, null));
@@ -171,13 +172,13 @@ public class DraftRunController {
         return out;
     }
 
-    private static LeagueTeamView toLeagueTeam(Xi xi, int projectedPoints, int projectedPos) {
+    private static LeagueTeamView toLeagueTeam(Xi xi, MonteCarlo.TeamCloud cloud, int sims, boolean you) {
         var ord = TeamLayout.inFormationOrder(xi); // lay the XI out in its own formation for the pitch viewer
         List<XiSlotView> squad = ord.slots().stream()
             .map(s -> new XiSlotView(s.position(), s.line().name(), s.player().name(), s.player().overall(), null, null, null))
             .toList();
         return new LeagueTeamView(xi.name, xi.overall(), tierLabel(xi.overall()), ord.formation(), squad,
-            projectedPoints, projectedPos);
+            cloud.projectedPoints(), cloud.projectedPos(), SeasonViewMapper.cloudView(cloud, sims), you);
     }
 
     private static String tierLabel(int strength) {
