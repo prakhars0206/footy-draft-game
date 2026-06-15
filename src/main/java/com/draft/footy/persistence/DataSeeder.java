@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Seeds the embedded H2 database from the FIFA CSV via Spring Data JPA (DESIGN_SPEC §16 — the point is cert
@@ -24,9 +26,10 @@ public class DataSeeder {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
-    // Comma-separated data sources. A bare path = sofifa multi-edition export (e.g. FIFA 15–FC 24). A `path:NN`
-    // entry = the newer EA-FC "ratings export" schema for edition NN (e.g. fc_25.csv:25). Missing files are skipped.
-    @Value("${footy.data.csv:data/fc_24.csv,data/fc_25.csv:25,data/EAFC26-Men.csv:26,data/male_players_all.csv}")
+    // Comma-separated data sources, earlier wins overlapping seasons. A bare path = sofifa multi-edition export;
+    // `path:NN` = the newer EA-FC "ratings export" schema for edition NN. male_players_all (clean 15–23) leads;
+    // fc_24 (a messier export, only used for its unique edition 24) follows; then the modern FC 25/26 files.
+    @Value("${footy.data.csv:data/male_players_all.csv,data/fc_24.csv,data/fc_25.csv:25,data/EAFC26-Men.csv:26}")
     private String csvPaths;
 
     private final ClubSeasonRepository repo;
@@ -38,7 +41,7 @@ public class DataSeeder {
         if (repo.count() > 0) return; // idempotent
 
         List<ClubSeason> clubs = new ArrayList<>();
-        boolean loadedSofifa = false;   // a bare path is a many-edition export; loading two would duplicate editions
+        Set<String> seenSeasons = new HashSet<>();   // earlier files win a season; overlaps from later files are dropped
         for (String spec : csvPaths.split(",")) {
             spec = spec.trim();
             if (spec.isEmpty()) continue;
@@ -49,13 +52,18 @@ public class DataSeeder {
                 try { edition = Integer.parseInt(spec.substring(colon + 1).trim()); path = Path.of(spec.substring(0, colon).trim()); }
                 catch (NumberFormatException ignore) { }
             }
-            if (edition < 0 && loadedSofifa) continue;        // already have a multi-edition export; skip overlaps
             if (!Files.exists(path)) { log.warn("data source not found, skipping: {}", path); continue; }
             List<ClubSeason> part = edition >= 0 ? FifaDataLoader.loadModern(path, edition)
                                                  : FifaDataLoader.loadAllSeasons(path);
-            log.info("Loaded {} club-seasons from {}{}", part.size(), path, edition >= 0 ? " (edition " + edition + ")" : "");
-            clubs.addAll(part);
-            if (edition < 0) loadedSofifa = true;
+            // Dedup by season: a multi-edition export (fc_24) overlaps an earlier one (male_players_all 15–23),
+            // so we keep only the seasons not yet provided — letting the cleaner/earlier file own them.
+            List<ClubSeason> fresh = part.stream().filter(c -> !seenSeasons.contains(c.season)).toList();
+            int dup = part.size() - fresh.size();
+            log.info("Loaded {} club-seasons from {}{}{}", fresh.size(), path,
+                edition >= 0 ? " (edition " + edition + ")" : "",
+                dup > 0 ? " (" + dup + " dup-season skipped)" : "");
+            clubs.addAll(fresh);
+            fresh.forEach(c -> seenSeasons.add(c.season));
         }
         repo.saveAll(clubs.stream().map(EngineMapper::toEntity).toList());
 

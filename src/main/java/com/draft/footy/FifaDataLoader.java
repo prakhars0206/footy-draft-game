@@ -42,6 +42,36 @@ public final class FifaDataLoader {
         return name;
     }
 
+    /**
+     * The EA Sports FC "ratings export" files (fc_25 / EAFC26) abbreviate or re-licence club names — "Man Utd",
+     * "Spurs", "Paris SG" — and EA FC 26 renames clubs that lost their licence ("Latium" = Lazio, "Milano FC" =
+     * AC Milan, identified by squad). This maps those back to the sofifa name so a club is one identity across
+     * all editions (so it's searchable and doesn't appear twice). Newly-promoted sides with no prior top-flight
+     * season (Como, Pisa, Paris FC, FC St. Pauli, Holstein Kiel) keep their own name.
+     */
+    private static final Map<String, String> CLUB_ALIASES = Map.ofEntries(
+        Map.entry("Man Utd", "Manchester United"), Map.entry("Newcastle Utd", "Newcastle United"),
+        Map.entry("Nott'm Forest", "Nottingham Forest"), Map.entry("Spurs", "Tottenham Hotspur"),
+        Map.entry("West Ham", "West Ham United"), Map.entry("Wolves", "Wolverhampton Wanderers"),
+        Map.entry("Brighton", "Brighton & Hove Albion"), Map.entry("Ipswich", "Ipswich Town"),
+        Map.entry("AS Roma", "Roma"), Map.entry("SSC Napoli", "Napoli"), Map.entry("Venezia", "Venezia FC"),
+        Map.entry("Milano FC", "AC Milan"), Map.entry("Lombardia FC", "Inter"),
+        Map.entry("Bergamo Calcio", "Atalanta"), Map.entry("Latium", "Lazio"),
+        Map.entry("Paris SG", "Paris Saint-Germain"), Map.entry("OL", "Olympique Lyonnais"),
+        Map.entry("OM", "Olympique de Marseille"), Map.entry("RC Lens", "Lens"),
+        Map.entry("AJ Auxerre", "Auxerre"), Map.entry("Havre AC", "Le Havre"), Map.entry("Toulouse FC", "Toulouse"),
+        Map.entry("Celta", "Celta de Vigo"), Map.entry("RC Celta", "Celta de Vigo"),
+        Map.entry("D. Alavés", "Deportivo Alavés"), Map.entry("Levante UD", "Levante Unión Deportiva"),
+        Map.entry("R. Valladolid CF", "Real Valladolid"), Map.entry("R. Oviedo", "Real Oviedo"),
+        Map.entry("RCD Espanyol", "Espanyol"), Map.entry("UD Las Palmas", "Las Palmas"),
+        Map.entry("Frankfurt", "Eintracht Frankfurt"), Map.entry("Leverkusen", "Bayer 04 Leverkusen"),
+        Map.entry("M'gladbach", "Borussia Mönchengladbach"), Map.entry("Union Berlin", "1. FC Union Berlin"));
+
+    private static String canonicalClub(String name) {
+        String n = name.trim();
+        return CLUB_ALIASES.getOrDefault(n, n);
+    }
+
     /** Tolerant int parse — handles the float-formatted columns ("24.0", "13.0") some EA FC exports use. */
     private static int parseIntLoose(String s) {
         s = s.trim();
@@ -53,6 +83,16 @@ public final class FifaDataLoader {
         TOP5.stream().map(League::id).collect(Collectors.toSet());
     private static final Set<String> TOP5_NAMES =
         TOP5.stream().flatMap(l -> l.names().stream()).collect(Collectors.toSet());
+
+    /**
+     * The <em>exact</em> top-flight league names the EA-FC ratings exports use (fc_25 / fc_26). The modern files
+     * have no league_id to disambiguate, so we must NOT reuse the broad sofifa alias set — e.g. "Primera División"
+     * there is the <strong>Argentine</strong> league, not Spain's (which is "LALIGA EA SPORTS"). Strict membership
+     * keeps non-European top flights (Liga Profesional, MLS, Libertadores…) out.
+     */
+    private static final Set<String> MODERN_TOP5_NAMES = Set.of(
+        "Premier League", "LALIGA EA SPORTS", "LaLiga Santander", "Serie A Enilive", "Serie A TIM",
+        "Bundesliga", "Ligue 1 McDonald's", "Ligue 1 Uber Eats");
 
     /** FIFA edition -> season label (FIFA 22 ~ 2021/22). */
     public static String seasonFor(int fifaEdition) {
@@ -114,7 +154,7 @@ public final class FifaDataLoader {
                     String club = f[iClub];
                     String key = club + "|" + season;
                     byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
-                    keyMeta.putIfAbsent(key, new String[]{club, season, f[iLeagueN]});
+                    keyMeta.putIfAbsent(key, new String[]{club, season, canonicalLeague(f[iLeagueN].trim())});
                 } catch (NumberFormatException ignore) { }
             }
         }
@@ -150,7 +190,7 @@ public final class FifaDataLoader {
             while ((line = r.readLine()) != null) {
                 String[] f = splitCsv(line);
                 if (f.length <= maxNeeded) continue;
-                if (!TOP5_NAMES.contains(f[iLg].trim())) continue;       // exact name = top flight only
+                if (!MODERN_TOP5_NAMES.contains(f[iLg].trim())) continue; // strict: top-5 European top flights only
                 try {
                     int overall = parseIntLoose(f[iOvr]);
                     List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
@@ -159,7 +199,7 @@ public final class FifaDataLoader {
                     String nation = iNat >= 0 && iNat < f.length ? f[iNat].trim() : "";
                     Player p = new Player(id, f[iName].trim(), nation, positions, overall, "");
 
-                    String club = f[iTeam].trim();
+                    String club = canonicalClub(f[iTeam]);
                     String key = club + "|" + season;
                     byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
                     keyMeta.putIfAbsent(key, new String[]{club, season, canonicalLeague(f[iLg].trim())});
@@ -192,13 +232,20 @@ public final class FifaDataLoader {
         return out;
     }
 
-    /** Top-5 membership: prefer the stable numeric league_id, fall back to the name-alias set. */
+    /**
+     * Top-5 membership. Some exports (notably the fc_24 dump) have a <em>scrambled</em> league_id↔league_name
+     * mapping — e.g. league_id 13 (Premier League) stamped on 1,700+ Championship rows, and vice-versa — so
+     * neither column is trustworthy alone (id-only leaks 2nd tiers; name-only over-includes). We therefore
+     * require <strong>both</strong> the numeric id and the name to independently say top-5. When the id column
+     * is absent (legacy single-season files) we fall back to the name alone.
+     */
     private static boolean isTop5(String[] f, int iLeagueId, int iLeagueN) {
+        boolean nameOk = iLeagueN >= 0 && iLeagueN < f.length && TOP5_NAMES.contains(f[iLeagueN].trim());
         if (iLeagueId >= 0 && iLeagueId < f.length) {
-            try { return TOP5_IDS.contains(parseIntLoose(f[iLeagueId])); }
-            catch (NumberFormatException ignore) { /* fall through to name match */ }
+            try { return nameOk && TOP5_IDS.contains(parseIntLoose(f[iLeagueId])); }
+            catch (NumberFormatException ignore) { return nameOk; } // id unparseable → trust the name
         }
-        return TOP5_NAMES.contains(f[iLeagueN]);
+        return nameOk;
     }
 
     /** First-present column index across alias names. Throws when required and none match; -1 when optional. */
