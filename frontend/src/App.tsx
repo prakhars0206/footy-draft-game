@@ -6,8 +6,9 @@ import { SetupScreen } from './screens/SetupScreen'
 import { DraftScreen } from './screens/DraftScreen'
 import { PlaybackScreen } from './screens/PlaybackScreen'
 import { ResultsScreen } from './screens/ResultsScreen'
+import { ExploreScreen } from './screens/ExploreScreen'
 
-type View = 'setup' | 'draft' | 'playback' | 'results'
+type View = 'setup' | 'draft' | 'playback' | 'results' | 'explore'
 
 export default function App() {
   const [view, setView] = useState<View>('setup')
@@ -28,7 +29,13 @@ export default function App() {
                   setRun(rs)
                   setView('draft')
                 }}
+                onExplore={() => setView('explore')}
               />
+            </Fade>
+          )}
+          {view === 'explore' && (
+            <Fade key="explore">
+              <ExploreScreen onBack={() => setView('setup')} />
             </Fade>
           )}
           {view === 'draft' && run && (

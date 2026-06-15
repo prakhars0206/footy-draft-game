@@ -12,7 +12,7 @@ const ERAS: { label: string; from: number | null }[] = [
   { label: 'MODERN ’16+', from: 2016 },
 ]
 
-export function SetupScreen({ onCreated }: { onCreated: (run: RunState) => void }) {
+export function SetupScreen({ onCreated, onExplore }: { onCreated: (run: RunState) => void; onExplore: () => void }) {
   const [formation, setFormation] = useState<string>('4-3-3')
   const [showRatings, setShowRatings] = useState<ShowRatings>('SCOUT')
   const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL')
@@ -124,6 +124,15 @@ export function SetupScreen({ onCreated }: { onCreated: (run: RunState) => void 
       >
         {busy ? 'Dealing the cards…' : 'Begin the Draft'}
       </motion.button>
+
+      <div className="text-center">
+        <button
+          onClick={onExplore}
+          className="font-display text-sm italic text-ink/55 underline decoration-edge underline-offset-4 transition hover:text-amber hover:decoration-amber"
+        >
+          or browse the Almanac — every top-5 squad, FIFA 15 → EA FC 26 →
+        </button>
+      </div>
     </div>
   )
 }

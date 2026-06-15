@@ -278,3 +278,68 @@ export const api = {
   preview: (id: string) => req<Preview>(`/${id}/preview`, 'GET'),
   simulate: (id: string) => req<SeasonReplay>(`/${id}/simulate`, 'POST'),
 }
+
+// ─── The Almanac (read-only dataset explorer, /api/explore) ──────────────────
+export interface AlmanacMeta {
+  leagues: string[]
+  years: number[]
+}
+export interface AlmanacClub {
+  club: string
+  season: string
+  league: string
+  strength: number
+  tier: string
+  topPlayer: string
+  topOverall: number
+}
+export interface AlmanacRosterPlayer {
+  sofifaId: number
+  name: string
+  nation: string
+  positions: string[]
+  line: LineName
+  overall: number
+}
+export interface AlmanacSquad {
+  club: string
+  season: string
+  league: string
+  strength: number
+  tier: string
+  formation: string
+  xi: XiSlot[] // backend AlmanacSlot {position, line, name, overall} ≡ XiSlot
+  roster: AlmanacRosterPlayer[]
+}
+
+export interface ClubQuery {
+  league?: string
+  from?: number
+  to?: number
+  q?: string
+  sort?: 'strength' | 'club' | 'season'
+  limit?: number
+}
+
+async function exploreReq<T>(path: string): Promise<T> {
+  const res = await fetch('/api/explore' + path)
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+export const explore = {
+  meta: () => exploreReq<AlmanacMeta>('/meta'),
+  clubs: (p: ClubQuery = {}) => {
+    const qs = new URLSearchParams()
+    if (p.league) qs.set('league', p.league)
+    if (p.from != null) qs.set('from', String(p.from))
+    if (p.to != null) qs.set('to', String(p.to))
+    if (p.q) qs.set('q', p.q)
+    if (p.sort) qs.set('sort', p.sort)
+    if (p.limit != null) qs.set('limit', String(p.limit))
+    const s = qs.toString()
+    return exploreReq<AlmanacClub[]>('/clubs' + (s ? '?' + s : ''))
+  },
+  squad: (club: string, season: string) =>
+    exploreReq<AlmanacSquad>(`/squad?club=${encodeURIComponent(club)}&season=${encodeURIComponent(season)}`),
+}
