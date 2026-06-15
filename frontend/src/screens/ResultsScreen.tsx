@@ -31,6 +31,23 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
     ? [...season.table].sort((a, b) => a.projectedPos - b.projectedPos)
     : season.table
 
+  // Talking points: champion + the season's biggest over/under-performer (by where their actual season landed in
+  // their own Monte-Carlo cloud). Deduped by team, so a runaway champion doesn't fill two cards.
+  const pctOf = (t: TeamRow) => t.monteCarlo?.percentile ?? null
+  const withPct = season.table.filter((t) => pctOf(t) != null)
+  const champ = season.table.find((t) => t.pos === 1)
+  const over = withPct.length ? withPct.reduce((a, b) => (pctOf(b)! > pctOf(a)! ? b : a)) : null
+  const under = withPct.length ? withPct.reduce((a, b) => (pctOf(b)! < pctOf(a)! ? b : a)) : null
+  const invincible = season.table.find((t) => t.lost === 0)
+  const highlights: { label: string; tone: string; row: TeamRow; note: string }[] = []
+  const addHL = (label: string, tone: string, row: TeamRow | null | undefined, note: string) => {
+    if (row && !highlights.some((h) => h.row.team === row.team)) highlights.push({ label, tone, row, note })
+  }
+  addHL('Champions', 'text-amber', champ, champ ? `${champ.points} pts · projected ${ordinal(champ.projectedPos)}` : '')
+  if (over?.monteCarlo) addHL('Overachievers', 'text-phosphor', over, `${ordinal(over.pos)}, projected ${ordinal(over.projectedPos)} · beat ${over.monteCarlo.percentile}% of their seasons`)
+  if (under?.monteCarlo) addHL('Underachievers', 'text-danger', under, `${ordinal(under.pos)}, projected ${ordinal(under.projectedPos)} · beat just ${under.monteCarlo.percentile}% of their seasons`)
+  if (highlights.length < 3 && invincible) addHL('Invincibles', 'text-phosphor', invincible, `unbeaten — ${invincible.won}W ${invincible.drawn}D`)
+
   return (
     <motion.div className="space-y-5" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.07 } } }}>
       <Reveal>
@@ -115,6 +132,22 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
             <Odds label="Top 4" v={season.projection.top4} />
             <Odds label="Relegation" v={season.projection.relegation} />
           </div>
+        </Reveal>
+      )}
+
+      {highlights.length > 0 && (
+        <Reveal>
+          <Panel label="Talking Points · tap to scout" className="p-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {highlights.map((h) => (
+                <button key={h.label} onClick={() => setTeam(h.row)} className="border border-edge p-3 text-left transition hover:border-amber/60 hover:bg-amber/5">
+                  <div className={`eyebrow ${h.tone}`}>{h.label}</div>
+                  <div className="mt-1 truncate font-display text-base font-semibold text-ink-bright">{h.row.team}{h.row.you ? ' ★' : ''}</div>
+                  <div className="mt-0.5 text-[11px] text-ink/55">{h.note}</div>
+                </button>
+              ))}
+            </div>
+          </Panel>
         </Reveal>
       )}
 
@@ -222,6 +255,21 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
               </div>
             </div>
             <TeamPitch formation={team.formation} players={team.players} showStats />
+            {team.monteCarlo && team.monteCarlo.percentile != null && (
+              <div className="mt-4 border-t border-edge pt-3">
+                <div className="flex items-baseline justify-between">
+                  <span className="eyebrow text-ink/50">Against the Odds · {team.monteCarlo.sims.toLocaleString()} sims</span>
+                  <span className="font-display text-xl font-bold text-amber">{ordinal(team.monteCarlo.percentile)} pct</span>
+                </div>
+                <div className="text-[11px] text-ink/50">{team.points} pts beat <span className="tabular-nums text-ink-bright">{team.monteCarlo.percentile}%</span> of their possible seasons</div>
+                <div className="mt-2"><Distribution mc={team.monteCarlo} actual={team.points} height="h-16" /></div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-ink/50">
+                  <span>title <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.title * 100)}%</span></span>
+                  <span>top 4 <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.top4 * 100)}%</span></span>
+                  <span>relegation <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.relegation * 100)}%</span></span>
+                </div>
+              </div>
+            )}
             <button onClick={() => setTeam(null)} className="mt-4 w-full border border-edge py-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70 hover:border-amber hover:text-amber">Close</button>
           </Backdrop>
         )}

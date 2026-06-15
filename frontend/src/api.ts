@@ -165,6 +165,7 @@ export interface TeamRow {
   gd: number
   you: boolean
   players: XiSlot[]
+  monteCarlo: MonteCarlo | null
 }
 export interface PlayerAward {
   player: string

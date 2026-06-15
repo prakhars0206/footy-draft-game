@@ -21,7 +21,7 @@ public final class SeasonViewMapper {
                                  int goals, int assists, int cleanSheets) { }
     public record TeamRow(int pos, int projectedPos, int projectedPoints, String team, String formation, int strength,
                           int points, int won, int drawn, int lost, int gf, int ga, int gd, boolean you,
-                          List<PlayerStatView> players) { }
+                          List<PlayerStatView> players, MonteCarloView monteCarlo) { }
     public record StatRow(String player, String team, int value) { }
     public record OddsView(int expectedPoints, double winLeague, double top4, double relegation) { }
     /** Monte-Carlo "real bookies": odds + a points distribution from N simulated seasons. `percentile` is the
@@ -30,11 +30,13 @@ public final class SeasonViewMapper {
                                  double title, double top4, double top6, double relegation, double unbeaten, double perfect,
                                  int histMin, int histBinWidth, int[] histogram, Integer percentile) { }
 
-    /** Map a single team's cloud to the view (per-team odds + distribution; no perfect/percentile per opponent). */
-    public static MonteCarloView cloudView(MonteCarlo.TeamCloud c, int sims) {
+    public static MonteCarloView cloudView(MonteCarlo.TeamCloud c, int sims) { return cloudView(c, sims, null); }
+
+    /** Map a single team's cloud to the view (per-team odds + distribution). `percentile` places its actual season. */
+    public static MonteCarloView cloudView(MonteCarlo.TeamCloud c, int sims, Integer percentile) {
         return new MonteCarloView(sims, c.mean(), c.min(), c.p5(), c.p25(), c.median(), c.p75(), c.p95(), c.max(),
             c.title(), c.top4(), c.top6(), c.relegation(), c.unbeaten(), 0.0,
-            c.histMin(), c.histBinWidth(), c.histogram(), null);
+            c.histMin(), c.histBinWidth(), c.histogram(), percentile);
     }
 
     public static MonteCarloView mcView(MonteCarlo.Outcome o, Integer percentile) {
@@ -103,9 +105,12 @@ public final class SeasonViewMapper {
                 return new PlayerStatView(sl.position(), sl.line().name(), sl.player().name(), sl.player().overall(),
                     ps != null ? ps.goals : 0, ps != null ? ps.assists : 0, ps != null ? ps.cleanSheets : 0);
             }).toList();
+            // Each team's cloud, with its ACTUAL season placed in it (percentile) — drives the click-a-team panel.
+            MonteCarloView teamMc = mc == null ? null
+                : cloudView(mc.teamClouds().get(s.team), mc.sims(), mc.teamClouds().get(s.team).percentile(s.points()));
             table.add(new TeamRow(i + 1, projPos.getOrDefault(s.team, i + 1), projPoints.getOrDefault(s.team, 0),
                 stripFormation(s.team.name), ord.formation(), s.team.overall(),
-                s.points(), s.won, s.drawn, s.lost, s.gf, s.ga, s.gd(), s.team == userXi, players));
+                s.points(), s.won, s.drawn, s.lost, s.gf, s.ga, s.gd(), s.team == userXi, players, teamMc));
         }
 
         // Debrief headline projection — Monte-Carlo (expected points + real odds) when present, else the fitted

@@ -18,13 +18,22 @@ public final class MonteCarlo {
 
     private MonteCarlo() { }
 
-    /** A single team's projection cloud: expected points + rank, quantiles, odds, and a histogram to render. */
+    /** A single team's projection cloud: expected points + rank, quantiles, odds, a histogram, and (server-side
+     *  only) the sorted points so the debrief can place that team's ACTUAL season in its cloud (percentile). */
     public record TeamCloud(
         int projectedPoints, int projectedPos,
         double mean, int min, int p5, int p25, int median, int p75, int p95, int max,
         double title, double top4, double top6, double relegation, double unbeaten,
-        int histMin, int histBinWidth, int[] histogram
-    ) { }
+        int histMin, int histBinWidth, int[] histogram,
+        int[] sortedPoints
+    ) {
+        /** Share of this team's simulated seasons that finished on FEWER points than {@code pts}. */
+        public int percentile(int pts) {
+            int below = 0;
+            for (int p : sortedPoints) { if (p < pts) below++; else break; }
+            return (int) Math.round(100.0 * below / sortedPoints.length);
+        }
+    }
 
     public record Outcome(
         int sims, double meanPoints,
@@ -114,7 +123,7 @@ public final class MonteCarlo {
                 d.mean, d.min, d.p5, d.p25, d.median, d.p75, d.p95, d.max,
                 (double) titleC[t] / sims, (double) top4C[t] / sims, (double) top6C[t] / sims,
                 (double) relegC[t] / sims, (double) unbeatenC[t] / sims,
-                d.histMin, d.histBinWidth, d.histogram));
+                d.histMin, d.histBinWidth, d.histogram, sorted));
         }
 
         int[] userSorted = ptsBySim[0].clone();
