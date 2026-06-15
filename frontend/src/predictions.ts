@@ -103,12 +103,16 @@ const finalHeadline = (pos: number) =>
   pos === 1 ? 'Win and you are champions.' : pos > 0 && pos <= 4 ? 'A top-four place rests on this.'
     : pos >= 18 ? 'Survival is on the line.' : 'The final day — finish in style.'
 
+// How many times each scenario TYPE may fire in one season — flavour prompts once, stakes prompts a couple of times.
+const CAP: Record<string, number> = { Talisman: 1, 'On a Roll': 1, 'Stop the Rot': 1, 'The Clincher': 1 }
+const DEFAULT_CAP = 2
+
 /**
- * The scenario for the user's match this matchday, or null if it's an ordinary game. Candidates are gathered in
- * priority order; we return the highest-priority one whose tag isn't in {@code recentTags} (so the same kind of
- * prompt doesn't repeat back-to-back). The final day always fires.
+ * The scenario for the user's match this matchday, or null if it's an ordinary game / all qualifying types are
+ * used up. Candidates are gathered in priority order; we return the highest-priority one whose type hasn't hit
+ * its season cap (so the same prompt doesn't keep repeating). The final day always fires.
  */
-export function detectScenario(replay: SeasonReplay, md: number, recentTags: string[] = []): Scenario | null {
+export function detectScenario(replay: SeasonReplay, md: number, usedCounts: Record<string, number> = {}): Scenario | null {
   const total = replay.matchdays.length
   const you = userName(replay)
   const um = findUserMatch(replay.matchdays[md], you)
@@ -157,6 +161,5 @@ export function detectScenario(replay: SeasonReplay, md: number, recentTags: str
   if (tal && tal.goals >= 8 && um.gf >= 1)
     cands.push(base('Talisman', `${lastName(tal.name)} has ${tal.goals} this season.`, 'Who opens the scoring for you?', 'scorer', scorerOpts(replay, um, md)))
 
-  if (!cands.length) return null
-  return cands.find((c) => !recentTags.includes(c.tag)) ?? cands[0]
+  return cands.find((c) => (usedCounts[c.tag] ?? 0) < (CAP[c.tag] ?? DEFAULT_CAP)) ?? null
 }

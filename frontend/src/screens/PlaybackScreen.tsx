@@ -20,7 +20,9 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   const [results, setResults] = useState<Record<number, boolean>>({}) // md -> called it right?
   const [prediction, setPrediction] = useState<Scenario | null>(null)
   const [pick, setPick] = useState<string | null>(null)
-  const recentTags = useRef<string[]>([])
+  const usedCounts = useRef<Record<string, number>>({}) // scenario tag -> times shown this season (season caps)
+  const playingRef = useRef(playing); playingRef.current = playing
+  const resumeRef = useRef(false) // was the sim playing when the prompt interrupted it?
   const atEnd = md >= total - 1
 
   const pundit: Pundit = { correct: Object.values(results).filter(Boolean).length, total: Object.keys(results).length }
@@ -29,13 +31,14 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   // last few prompts (variety), and rate-limits by PREDICT_COOLDOWN; the final day always asks.
   useEffect(() => {
     if (prediction || results[md] !== undefined) return
-    const sc = detectScenario(replay, md, recentTags.current)
+    const sc = detectScenario(replay, md, usedCounts.current)
     if (!sc) return
     const answered = Object.keys(results).map(Number)
     const lastAsked = answered.length ? Math.max(...answered) : -99
     if (sc.finalDay || md - lastAsked >= PREDICT_COOLDOWN) {
+      resumeRef.current = playingRef.current // restore play/pause after the prompt
       setPrediction(sc); setPick(null); setPlaying(false)
-      recentTags.current = [sc.tag, ...recentTags.current].slice(0, 3)
+      usedCounts.current[sc.tag] = (usedCounts.current[sc.tag] ?? 0) + 1
     }
   }, [md, prediction, results, replay])
 
@@ -142,7 +145,7 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
           <PredictionView
             scenario={prediction!} mdNumber={day.number} userMatch={userMatch} pick={pick}
             onPick={(opt) => { setPick(opt.key); setResults((r) => ({ ...r, [md]: opt.correct })) }}
-            onContinue={() => { setPrediction(null); setPick(null) }}
+            onContinue={() => { setPrediction(null); setPick(null); setPlaying(resumeRef.current) }}
           />
         ) : (
           <Panel label={`Matchday ${day.number} · results`} className="flex min-h-0 flex-col p-4">
