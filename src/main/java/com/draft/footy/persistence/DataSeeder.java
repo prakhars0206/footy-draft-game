@@ -11,8 +11,11 @@ import org.springframework.stereotype.Component;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -65,10 +68,37 @@ public class DataSeeder {
             clubs.addAll(fresh);
             fresh.forEach(c -> seenSeasons.add(c.season));
         }
+        clubs = canonicalizeClubNames(clubs);
         repo.saveAll(clubs.stream().map(EngineMapper::toEntity).toList());
 
         long seasons = clubs.stream().map(c -> c.season).distinct().count();
         log.info("Seeded H2: {} top-5 club-seasons across {} editions ({} players).",
             clubs.size(), seasons, clubs.stream().mapToInt(c -> c.roster.size()).sum());
+    }
+
+    /**
+     * Unify a club's display name across editions. The source data labels the same club inconsistently per edition
+     * ("Real Madrid" vs "Real Madrid CF", "AC Milan" vs "Milan", "Atlético Madrid" vs "Atlético de Madrid"), which
+     * makes one club show up as two in the browser/search. Group by the engine dedup key ({@link ClubSeason#clubKey})
+     * — which already treats those as the same club — and relabel every season to that club's most-common name
+     * (ties → the longer, more complete form). Safe: keys never span leagues, so this only re-labels, never merges
+     * distinct clubs.
+     */
+    private static List<ClubSeason> canonicalizeClubNames(List<ClubSeason> clubs) {
+        Map<String, Map<String, Long>> freq = new HashMap<>();
+        for (ClubSeason cs : clubs)
+            freq.computeIfAbsent(cs.clubKey(), k -> new HashMap<>()).merge(cs.club, 1L, Long::sum);
+        Map<String, String> canonical = new HashMap<>();
+        for (var e : freq.entrySet())
+            canonical.put(e.getKey(), e.getValue().entrySet().stream()
+                .max(Comparator.<Map.Entry<String, Long>>comparingLong(Map.Entry::getValue)
+                    .thenComparingInt(x -> x.getKey().length()))
+                .orElseThrow().getKey());
+        return clubs.stream()
+            .map(cs -> {
+                String name = canonical.get(cs.clubKey());
+                return name.equals(cs.club) ? cs : new ClubSeason(name, cs.season, cs.league, cs.roster);
+            })
+            .toList();
     }
 }
