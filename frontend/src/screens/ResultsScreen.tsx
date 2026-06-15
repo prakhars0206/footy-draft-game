@@ -246,7 +246,7 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
           <Backdrop onClose={() => setTeam(null)}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate font-display text-lg font-semibold text-ink-bright">{team.team}</div>
+                <div className="truncate font-display text-lg font-semibold text-ink-bright">{team.team}{team.you && <span className="text-amber"> · your XI</span>}</div>
                 <div className="text-[11px] text-ink/50">{team.formation} · finished {ordinal(team.pos)} · projected {ordinal(team.projectedPos)} ({team.projectedPoints} pts)</div>
               </div>
               <div className="shrink-0 text-right text-[11px]">
@@ -254,22 +254,29 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
                 <div className="text-ink/50">{team.won}-{team.drawn}-{team.lost}</div>
               </div>
             </div>
-            <TeamPitch formation={team.formation} players={team.players} showStats />
-            {team.monteCarlo && team.monteCarlo.percentile != null && (
-              <div className="mt-4 border-t border-edge pt-3">
-                <div className="flex items-baseline justify-between">
-                  <span className="eyebrow text-ink/50">Against the Odds · {team.monteCarlo.sims.toLocaleString()} sims</span>
-                  <span className="font-display text-xl font-bold text-amber">{ordinal(team.monteCarlo.percentile)} pct</span>
+            <div className={`grid gap-5 ${team.monteCarlo?.percentile != null ? 'sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}`}>
+              <TeamPitch formation={team.formation} players={team.players} showStats />
+              {team.monteCarlo && team.monteCarlo.percentile != null && (
+                <div className="flex flex-col justify-center">
+                  <div className="eyebrow text-ink/50">Against the Odds · {team.monteCarlo.sims.toLocaleString()} sims</div>
+                  <div className="mt-1 flex items-baseline gap-3">
+                    <span className="font-display text-5xl font-black leading-none text-amber">{ordinal(team.monteCarlo.percentile)}</span>
+                    <span className="font-display text-[13px] italic text-ink/60">percentile</span>
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink/55">{team.points} pts beat <span className="tabular-nums text-ink-bright">{team.monteCarlo.percentile}%</span> of their possible seasons</div>
+                  <div className="mt-4"><Distribution mc={team.monteCarlo} actual={team.points} height="h-20" /></div>
+                  <div className="mt-2 flex gap-4 text-[10px] text-ink/45">
+                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber" />their season</span>
+                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-ink/45" />median ({team.monteCarlo.median})</span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-1 border-t border-edge pt-3">
+                    <Mc label="Title" v={team.monteCarlo.title} />
+                    <Mc label="Top 4" v={team.monteCarlo.top4} />
+                    <Mc label="Relegation" v={team.monteCarlo.relegation} />
+                  </div>
                 </div>
-                <div className="text-[11px] text-ink/50">{team.points} pts beat <span className="tabular-nums text-ink-bright">{team.monteCarlo.percentile}%</span> of their possible seasons</div>
-                <div className="mt-2"><Distribution mc={team.monteCarlo} actual={team.points} height="h-16" /></div>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-ink/50">
-                  <span>title <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.title * 100)}%</span></span>
-                  <span>top 4 <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.top4 * 100)}%</span></span>
-                  <span>relegation <span className="tabular-nums text-amber">{Math.round(team.monteCarlo.relegation * 100)}%</span></span>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
             <button onClick={() => setTeam(null)} className="mt-4 w-full border border-edge py-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/70 hover:border-amber hover:text-amber">Close</button>
           </Backdrop>
         )}
@@ -351,7 +358,7 @@ function Leaders({ title, rows, unit }: { title: string; rows: SeasonView['golde
 function Backdrop({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-terminal/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="w-full max-w-lg border border-edge-bright bg-panel p-6" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>{children}</motion.div>
+      <motion.div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-edge-bright bg-panel p-6" initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()}>{children}</motion.div>
     </motion.div>
   )
 }
