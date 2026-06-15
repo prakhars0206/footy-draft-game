@@ -14,6 +14,7 @@ export default function App() {
   const [run, setRun] = useState<RunState | null>(null)
   const [replay, setReplay] = useState<SeasonReplay | null>(null)
   const [season, setSeason] = useState<SeasonView | null>(null)
+  const [pundit, setPundit] = useState<{ correct: number; total: number } | null>(null)
 
   return (
     <div className="min-h-screen bg-terminal text-ink">
@@ -46,7 +47,8 @@ export default function App() {
             <Fade key="playback">
               <PlaybackScreen
                 replay={replay}
-                onFinish={() => {
+                onFinish={(p) => {
+                  setPundit(p.total > 0 ? p : null)
                   setSeason(replay.debrief)
                   setView('results')
                 }}
@@ -57,10 +59,12 @@ export default function App() {
             <Fade key="results">
               <ResultsScreen
                 season={season}
+                pundit={pundit}
                 onNewRun={() => {
                   setRun(null)
                   setReplay(null)
                   setSeason(null)
+                  setPundit(null)
                   setView('setup')
                 }}
               />

@@ -6,7 +6,7 @@ import { Panel, Stamp } from '../components/primitives'
 import { TeamPitch } from '../components/TeamPitch'
 import { Distribution } from '../components/Distribution'
 
-export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewRun: () => void }) {
+export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView; pundit?: { correct: number; total: number } | null; onNewRun: () => void }) {
   const [tableView, setTableView] = useState<'actual' | 'projected'>('actual')
   const [team, setTeam] = useState<TeamRow | null>(null)
 
@@ -45,6 +45,13 @@ export function ResultsScreen({ season, onNewRun }: { season: SeasonView; onNewR
             <Stamp text={verdict.text} tone={verdict.tone} />
           </div>
           {unbeaten && !perfect && <div className="mt-3 font-display text-sm italic text-phosphor">unbeaten — {season.won}W {season.drawn}D</div>}
+          {pundit && pundit.total > 0 && (
+            <div className="mt-3 text-[12px] text-ink/55">
+              <span className="eyebrow text-ink/45">Pundit Rating</span>{' '}
+              you read <span className="font-bold tabular-nums text-amber">{pundit.correct}</span> of <span className="tabular-nums">{pundit.total}</span> big moments
+              {pundit.correct === pundit.total ? ' — flawless' : pundit.correct === 0 ? ' — ouch' : ''}
+            </div>
+          )}
         </Panel>
       </Reveal>
 
