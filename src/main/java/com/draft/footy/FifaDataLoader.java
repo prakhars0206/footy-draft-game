@@ -23,16 +23,31 @@ import java.util.stream.Collectors;
  */
 public final class FifaDataLoader {
 
-    /** One top-5 league: its stable sofifa league_id plus every EA name it has carried across editions. */
-    private record League(int id, Set<String> names) {}
+    /** One top-5 league: its stable sofifa league_id, a canonical display name, and every EA name it has carried
+     *  across editions (incl. the sponsored EA Sports FC names — "LALIGA EA SPORTS", "Serie A Enilive", …). */
+    private record League(int id, String primary, Set<String> names) {}
 
     private static final List<League> TOP5 = List.of(
-        new League(13, Set.of("Premier League", "English Premier League")),
-        new League(53, Set.of("La Liga", "LaLiga Santander", "Spain Primera Division", "Spanish Primera Division",
-            "Primera Division", "Primera División")),
-        new League(31, Set.of("Serie A", "Italian Serie A")),
-        new League(19, Set.of("Bundesliga", "German 1. Bundesliga")),
-        new League(16, Set.of("Ligue 1", "French Ligue 1", "Ligue 1 Conforama", "Ligue 1 Uber Eats")));
+        new League(13, "Premier League", Set.of("Premier League", "English Premier League")),
+        new League(53, "La Liga", Set.of("La Liga", "LaLiga Santander", "Spain Primera Division", "Spanish Primera Division",
+            "Primera Division", "Primera División", "LALIGA EA SPORTS")),
+        new League(31, "Serie A", Set.of("Serie A", "Italian Serie A", "Serie A Enilive", "Serie A TIM")),
+        new League(19, "Bundesliga", Set.of("Bundesliga", "German 1. Bundesliga")),
+        new League(16, "Ligue 1", Set.of("Ligue 1", "French Ligue 1", "Ligue 1 Conforama", "Ligue 1 Uber Eats",
+            "Ligue 1 McDonald's")));
+
+    /** The sponsored/aliased name back to a clean league label. */
+    private static String canonicalLeague(String name) {
+        for (League l : TOP5) if (l.names().contains(name)) return l.primary();
+        return name;
+    }
+
+    /** Tolerant int parse — handles the float-formatted columns ("24.0", "13.0") some EA FC exports use. */
+    private static int parseIntLoose(String s) {
+        s = s.trim();
+        int dot = s.indexOf('.');
+        return Integer.parseInt(dot >= 0 ? s.substring(0, dot) : s);
+    }
 
     private static final Set<Integer> TOP5_IDS =
         TOP5.stream().map(League::id).collect(Collectors.toSet());
@@ -86,7 +101,7 @@ public final class FifaDataLoader {
                 if (!"1".equals(f[iLevel].trim())) continue;
                 if (!isTop5(f, iLeagueId, iLeagueN)) continue;
                 try {
-                    int edition = iVersion >= 0 ? Integer.parseInt(f[iVersion].trim()) : defaultEdition;
+                    int edition = iVersion >= 0 ? parseIntLoose(f[iVersion]) : defaultEdition;
                     if (edition < 0) continue; // no version column and no default — cannot label the season
                     String season = seasonFor(edition);
 
@@ -104,20 +119,83 @@ public final class FifaDataLoader {
             }
         }
 
+        return group(byKey, keyMeta);
+    }
+
+    /**
+     * Loads a single EA Sports FC edition in the newer "ratings export" schema (fc_25 / EAFC26-Men style):
+     * {@code Name, OVR, Position, Alternative positions, Nation, League, Team} — no {@code league_id},
+     * {@code league_level} or {@code fifa_version}. Top flight is identified by the (sponsored) league NAME, so
+     * the second tiers ("LALIGA HYPERMOTION", "Bundesliga 2") are naturally excluded. The season is {@code edition}.
+     */
+    public static List<ClubSeason> loadModern(Path csv, int edition) throws IOException {
+        Map<String, List<Player>> byKey = new LinkedHashMap<>();
+        Map<String, String[]> keyMeta = new LinkedHashMap<>();
+        String season = seasonFor(edition);
+
+        try (BufferedReader r = Files.newBufferedReader(csv)) {
+            String[] header = splitCsv(r.readLine());
+            int iName = idx(header, true,  "Name", "long_name", "short_name");
+            int iOvr  = idx(header, true,  "OVR", "overall");
+            int iPos  = idx(header, true,  "Position", "player_positions");
+            int iAlt  = idx(header, false, "Alternative positions");
+            int iNat  = idx(header, false, "Nation", "nationality_name");
+            int iLg   = idx(header, true,  "League", "league_name");
+            int iTeam = idx(header, true,  "Team", "club_name", "club");
+            int iId   = idx(header, false, "ID", "player_id", "sofifa_id");
+            int maxNeeded = Math.max(Math.max(iName, iOvr), Math.max(iLg, iTeam));
+
+            int synthId = -1; // stable-ish ids for files without one (FC25 has no player id)
+            String line;
+            while ((line = r.readLine()) != null) {
+                String[] f = splitCsv(line);
+                if (f.length <= maxNeeded) continue;
+                if (!TOP5_NAMES.contains(f[iLg].trim())) continue;       // exact name = top flight only
+                try {
+                    int overall = parseIntLoose(f[iOvr]);
+                    List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
+                    if (positions.isEmpty()) continue;
+                    int id = (iId >= 0 && iId < f.length && !f[iId].isBlank()) ? parseIntLoose(f[iId]) : synthId--;
+                    String nation = iNat >= 0 && iNat < f.length ? f[iNat].trim() : "";
+                    Player p = new Player(id, f[iName].trim(), nation, positions, overall, "");
+
+                    String club = f[iTeam].trim();
+                    String key = club + "|" + season;
+                    byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
+                    keyMeta.putIfAbsent(key, new String[]{club, season, canonicalLeague(f[iLg].trim())});
+                } catch (NumberFormatException ignore) { }
+            }
+        }
+        return group(byKey, keyMeta);
+    }
+
+    /** Combine the primary position with any alternates ("LW" or "['RW', 'LM']") into a clean, de-duped list. */
+    private static List<String> modernPositions(String primary, String alt) {
+        List<String> out = new ArrayList<>();
+        String p = primary.trim();
+        if (!p.isEmpty()) out.add(p);
+        for (String a : alt.replaceAll("[\\[\\]'\"]", " ").split(",")) {
+            a = a.trim();
+            if (!a.isEmpty() && !out.contains(a)) out.add(a);
+        }
+        return out;
+    }
+
+    /** Group accumulated players into club-seasons, keeping only those that can field an XI (>=11). */
+    private static List<ClubSeason> group(Map<String, List<Player>> byKey, Map<String, String[]> keyMeta) {
         List<ClubSeason> out = new ArrayList<>();
-        for (var e : byKey.entrySet()) {
-            if (e.getValue().size() >= 11) { // need a fieldable XI
+        for (var e : byKey.entrySet())
+            if (e.getValue().size() >= 11) {
                 String[] m = keyMeta.get(e.getKey());
                 out.add(new ClubSeason(m[0], m[1], m[2], e.getValue()));
             }
-        }
         return out;
     }
 
     /** Top-5 membership: prefer the stable numeric league_id, fall back to the name-alias set. */
     private static boolean isTop5(String[] f, int iLeagueId, int iLeagueN) {
         if (iLeagueId >= 0 && iLeagueId < f.length) {
-            try { return TOP5_IDS.contains(Integer.parseInt(f[iLeagueId].trim())); }
+            try { return TOP5_IDS.contains(parseIntLoose(f[iLeagueId])); }
             catch (NumberFormatException ignore) { /* fall through to name match */ }
         }
         return TOP5_NAMES.contains(f[iLeagueN]);

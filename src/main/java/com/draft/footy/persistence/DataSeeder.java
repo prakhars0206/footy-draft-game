@@ -8,7 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,8 +24,10 @@ public class DataSeeder {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
-    @Value("${footy.data.csv:data/male_players_all.csv}")
-    private String csvPath;
+    // Comma-separated data sources. A bare path = sofifa multi-edition export (e.g. FIFA 15–FC 24). A `path:NN`
+    // entry = the newer EA-FC "ratings export" schema for edition NN (e.g. fc_25.csv:25). Missing files are skipped.
+    @Value("${footy.data.csv:data/fc_24.csv,data/fc_25.csv:25,data/EAFC26-Men.csv:26,data/male_players_all.csv}")
+    private String csvPaths;
 
     private final ClubSeasonRepository repo;
 
@@ -33,7 +37,26 @@ public class DataSeeder {
     void seed() throws Exception {
         if (repo.count() > 0) return; // idempotent
 
-        List<ClubSeason> clubs = FifaDataLoader.loadAllSeasons(Path.of(csvPath));
+        List<ClubSeason> clubs = new ArrayList<>();
+        boolean loadedSofifa = false;   // a bare path is a many-edition export; loading two would duplicate editions
+        for (String spec : csvPaths.split(",")) {
+            spec = spec.trim();
+            if (spec.isEmpty()) continue;
+            int colon = spec.lastIndexOf(':');
+            int edition = -1;
+            Path path = Path.of(spec);
+            if (colon > 1) {                                  // "path:NN" → modern single-edition file
+                try { edition = Integer.parseInt(spec.substring(colon + 1).trim()); path = Path.of(spec.substring(0, colon).trim()); }
+                catch (NumberFormatException ignore) { }
+            }
+            if (edition < 0 && loadedSofifa) continue;        // already have a multi-edition export; skip overlaps
+            if (!Files.exists(path)) { log.warn("data source not found, skipping: {}", path); continue; }
+            List<ClubSeason> part = edition >= 0 ? FifaDataLoader.loadModern(path, edition)
+                                                 : FifaDataLoader.loadAllSeasons(path);
+            log.info("Loaded {} club-seasons from {}{}", part.size(), path, edition >= 0 ? " (edition " + edition + ")" : "");
+            clubs.addAll(part);
+            if (edition < 0) loadedSofifa = true;
+        }
         repo.saveAll(clubs.stream().map(EngineMapper::toEntity).toList());
 
         long seasons = clubs.stream().map(c -> c.season).distinct().count();
