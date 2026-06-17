@@ -93,40 +93,31 @@ public final class FifaDataLoader {
         return m;
     }
 
-    /**
-     * Overall offset that puts older editions on the modern (FIFA 17+) rating scale. EA inflated ratings once,
-     * across the FIFA 15→16→17 transition (same-player median drift was flat before and after) — but it was NOT
-     * uniform: the mid-tier rose ~+2 while elite players stayed pinned to the ceiling (the 94-rated never moved,
-     * and the player-overall distributions are identical at the top). So we taper — lift the mid, leave the top
-     * alone — which aligns club strength/tiers across eras without inventing 96-rated players. FIFA ≤15 gets the
-     * full step (+2 below 83, +1 at 83–88, 0 from 89), FIFA 16 the half step, FIFA 17+ nothing.
-     */
-    /** The active offset. Production uses {@link #flatOffset}; analysis tooling (TierReport) can swap it. */
-    static java.util.function.IntBinaryOperator eraOffsetFn = FifaDataLoader::flatOffset;
+    /** The active offset. Production uses {@link #wideTaperOffset}; analysis tooling (TierReport) can swap it. */
+    static java.util.function.IntBinaryOperator eraOffsetFn = FifaDataLoader::wideTaperOffset;
 
     private static int eraOffset(int edition, int overall) {
         return eraOffsetFn.applyAsInt(edition, overall);
     }
 
     /**
-     * Committed scheme: a FLAT lift onto the modern scale — FIFA ≤15 +2, FIFA 16 +1, FIFA 17+ none. Because every
-     * card in an edition moves by the same amount, within-edition ranking order is preserved (we don't bump some
-     * cards and not others). The load-site cap at {@link #ERA_CAP} then keeps it sane at the very top: only a raw
-     * 94 in a +2 edition would exceed the cap (96 → 95), so prime Messi (95) still sits above everyone (≤94).
+     * Committed scheme: a graduated lift onto the modern (FIFA 17+) scale — +2 up to 84, +1 for 85–89, and 0 from
+     * 90 so the genuine elite keep their raw sofifa ratings. FIFA ≤15 gets the full step, FIFA 16 the half (+1 to
+     * 89), FIFA 17+ nothing. The gentle +2→+1→0 ramp avoids a sudden jump, and because the lift never reaches 90
+     * (only authentic 90+ players sit there, untouched), the 94 ceiling holds with no explicit cap.
      */
-    static int flatOffset(int edition, int overall) {
-        return edition <= 15 ? 2 : edition == 16 ? 1 : 0;
+    static int wideTaperOffset(int edition, int overall) {
+        if (edition >= 17 || overall >= 90) return 0; // modern scale, or a genuine elite player (raw ≥90)
+        if (edition == 16) return 1;                  // FIFA 16 half-step (sub-90 only)
+        return overall <= 84 ? 2 : 1;                 // FIFA ≤15: +2 up to 84, +1 for 85–89
     }
 
-    /** Earlier alternative, kept for the TierReport comparison: a ceiling-preserving taper (elite untouched). */
+    /** Considered alternative, kept for the TierReport comparison: a higher ceiling-preserving taper (89+ untouched). */
     static int taperOffset(int edition, int overall) {
         if (edition >= 17 || overall >= 89) return 0;
         int step = edition == 16 ? 1 : 2;
         return overall >= 87 ? Math.min(step, 1) : step;
     }
-
-    /** Era-normalised ceiling: a +2 edition's raw-94 (prime Messi) lands at 95, one above the modern 94. */
-    private static final int ERA_CAP = 95;
 
     /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
     private static String cleanName(String s) {
@@ -224,7 +215,7 @@ public final class FifaDataLoader {
                     String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
                     int raw = parseIntLoose(f[iOverall]);
-                    int overall = Math.min(ERA_CAP, raw + eraOffset(edition, raw));
+                    int overall = Math.min(99, raw + eraOffset(edition, raw));
                     Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), nation,
                         positions, overall, dob);
 
@@ -270,7 +261,7 @@ public final class FifaDataLoader {
                 if (!MODERN_TOP5_NAMES.contains(f[iLg].trim())) continue; // strict: top-5 European top flights only
                 try {
                     int rawOvr = parseIntLoose(f[iOvr]);
-                    int overall = Math.min(ERA_CAP, rawOvr + eraOffset(edition, rawOvr)); // no-op for FC 25/26
+                    int overall = Math.min(99, rawOvr + eraOffset(edition, rawOvr)); // no-op for FC 25/26
                     List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
                     if (positions.isEmpty()) continue;
                     int id = (iId >= 0 && iId < f.length && !f[iId].isBlank()) ? parseIntLoose(f[iId]) : synthId--;

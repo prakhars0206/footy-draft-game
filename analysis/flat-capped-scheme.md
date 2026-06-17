@@ -1,6 +1,7 @@
-# Scheme deep-dive — flat +2 / +1 (FIFA 16), capped at 95  (COMMITTED)
+# Scheme deep-dive — flat +2 / +1 (FIFA 16), capped at 95  (considered, NOT committed)
 
-Offset: **FIFA ≤15 → +2**, **FIFA 16 → +1**, **FIFA 17+ → 0**, then the result is **clamped at 95**.
+The committed scheme is the **wide taper** (see tier-distribution.md). This file deep-dives the
+flat+cap alternative that was considered. Offset: **FIFA ≤15 +2 / FIFA 16 +1 / 17+ 0**, **clamped at 95**.
 Tier = club `optimalStrength`: Iconic ≥87 · Elite 83–86 · Pedigree 78–82 · Steady 72–77 · Minnow ≤71.
 
 ## A. Tier distribution per edition (this scheme)

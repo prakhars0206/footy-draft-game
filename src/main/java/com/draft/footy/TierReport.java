@@ -47,7 +47,10 @@ public final class TierReport {
             new Scheme("Raw sofifa (no offset)", (e, o) -> 0),
             new Scheme("Ceiling-preserving taper (considered, not chosen)", FifaDataLoader::taperOffset),
             new Scheme("Flat +1 (FIFA ≤16)", (e, o) -> e <= 16 ? 1 : 0),
-            new Scheme("Flat +2 (FIFA ≤15), +1 (FIFA 16) — COMMITTED (capped at 95 in prod)", (e, o) -> e <= 15 ? 2 : e == 16 ? 1 : 0),
+            new Scheme("Flat +2 (FIFA ≤15), +1 (FIFA 16), cap 95 (considered)", (e, o) -> e <= 15 ? 2 : e == 16 ? 1 : 0),
+            new Scheme("Low taper: +2≤83, +1@84-85, 0 from 86 (FIFA 16 half)", (e, o) ->
+                e >= 17 ? 0 : e == 16 ? (o <= 85 ? 1 : 0) : (o <= 83 ? 2 : o <= 85 ? 1 : 0)),
+            new Scheme("Wide taper: +2≤84, +1@85-89, 0 from 90 — COMMITTED (FIFA 16 half)", FifaDataLoader::wideTaperOffset),
         };
 
         StringBuilder md = new StringBuilder();

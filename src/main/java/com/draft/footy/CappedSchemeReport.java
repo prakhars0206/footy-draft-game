@@ -34,8 +34,9 @@ public final class CappedSchemeReport {
         List<Integer> editions = raw.stream().map(c -> editionOf(c.season)).distinct().sorted().toList();
 
         StringBuilder md = new StringBuilder();
-        md.append("# Scheme deep-dive — flat +2 / +1 (FIFA 16), capped at 95  (COMMITTED)\n\n");
-        md.append("Offset: **FIFA ≤15 → +2**, **FIFA 16 → +1**, **FIFA 17+ → 0**, then the result is **clamped at 95**.\n");
+        md.append("# Scheme deep-dive — flat +2 / +1 (FIFA 16), capped at 95  (considered, NOT committed)\n\n");
+        md.append("The committed scheme is the **wide taper** (see tier-distribution.md). This file deep-dives the\n");
+        md.append("flat+cap alternative that was considered. Offset: **FIFA ≤15 +2 / FIFA 16 +1 / 17+ 0**, **clamped at 95**.\n");
         md.append("Tier = club `optimalStrength`: Iconic ≥87 · Elite 83–86 · Pedigree 78–82 · Steady 72–77 · Minnow ≤71.\n\n");
 
         // ---- A. tier distribution ----
