@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import type {
-  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonReplay, Slot, SpinClub, SpinView, SquadPlayer, Strength,
+  DeclassifiedPlayer, LeagueTeam, Preview, RunState, SeasonReplay, ShowRatings, Slot, SpinClub, SpinView, SquadPlayer, Strength,
 } from '../api'
 import { lineClasses, lineOf } from '../theme'
 import { PitchView } from '../components/PitchView'
 import { TeamPitch } from '../components/TeamPitch'
 import { SpinReveal } from '../components/SpinReveal'
-import { RatingBadge } from '../components/RatingBadge'
+import { ScoutRating } from '../components/ScoutRating'
 import { PositionChip } from '../components/PositionChip'
-import { Distribution } from '../components/Distribution'
+import { ForecastCone } from '../components/ForecastCone'
 import { Panel, Prompt, Stamp } from '../components/primitives'
 
 const ordinal = (n: number) => {
@@ -160,7 +160,7 @@ export function DraftScreen({
             <SpinReveal spin={spin} onPick={(c) => { setChosenClub(c); setSelected(null); setRevealing(false) }} />
           ) : (
             <SquadPanel
-              club={chosenClub} tier={spin.tier}
+              club={chosenClub} tier={spin.tier} showRatings={run.showRatings}
               selected={selected} busy={busy} canReroll={run.rerollsRemaining > 0}
               onSelect={(p) => { setSelected(p); setMoveFrom(null) }}
               onReroll={doSpin} onDraft={(p, pos) => doDraft(pos, p.sofifaId)}
@@ -207,12 +207,16 @@ function DeclassifiedPanel({
         <div className="text-[11px] text-ink/45">{data.season} · who you passed on</div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
-        {data.players.map((p) => {
+        {data.players.map((p, i) => {
           const lc = lineClasses[p.line]
           const dim = !p.eligible && !p.draftedByYou // couldn't be picked into an open slot — greyed out
           return (
             <div key={p.sofifaId} className={`flex items-center gap-2 border px-2 py-1 ${p.draftedByYou ? 'border-amber/60 bg-amber/10' : dim ? 'border-edge/50 opacity-40' : 'border-edge'}`}>
-              <span className={`flex h-7 w-8 items-center justify-center border ${lc.border} ${lc.text} text-xs font-bold tabular-nums`}>{p.overall}</span>
+              <span className={`relative flex h-7 w-8 items-center justify-center overflow-hidden border ${lc.border} ${lc.text} text-xs font-bold tabular-nums`}>
+                {p.overall}
+                {/* the redaction wipes away — declassifying the true rating */}
+                <motion.span className="redacted absolute inset-0" initial={{ scaleX: 1 }} animate={{ scaleX: 0 }} style={{ transformOrigin: 'right' }} transition={{ delay: 0.15 + Math.min(i * 0.03, 0.6), duration: 0.45, ease: 'easeInOut' }} />
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-semibold text-ink-bright">{p.name}</div>
                 <div className={`text-[9px] font-semibold ${lc.text}`}>{p.position}{p.draftedByYou ? ' · ★ yours' : dim ? ' · n/a' : ''}</div>
@@ -246,7 +250,8 @@ function LeaguePanel({ preview, selected, busy, onSelect, onRun }: { preview: Pr
         </div>
         {mc && (
           <div className="mt-3">
-            <Distribution mc={mc} height="h-12" />
+            <div className="eyebrow mb-1 text-ink/40">Points forecast</div>
+            <ForecastCone mc={mc} height={52} />
             <div className="mt-1 text-[11px] text-ink/45">
               <span className="font-display italic">{mc.sims.toLocaleString()} simulated seasons</span> · likely <span className="tabular-nums text-ink-bright">{mc.p25}–{mc.p75}</span> pts
               {mc.unbeaten > 0 && <> · unbeaten <span className="tabular-nums text-phosphor">{pct(mc.unbeaten)}</span></>}
@@ -302,17 +307,24 @@ function OddsRow({ label, v }: { label: string; v: number }) {
 }
 
 function SquadPanel({
-  club, tier, selected, busy, canReroll, onSelect, onReroll, onDraft,
+  club, tier, showRatings, selected, busy, canReroll, onSelect, onReroll, onDraft,
 }: {
-  club: SpinClub; tier: string; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
+  club: SpinClub; tier: string; showRatings: ShowRatings; selected: SquadPlayer | null; busy: boolean; canReroll: boolean
   onSelect: (p: SquadPlayer) => void; onReroll: () => void; onDraft: (p: SquadPlayer, position: string) => void
 }) {
+  const scouted = showRatings !== 'ON' // SCOUT/OFF → frame the squad as a classified scouting dossier
   return (
-    <Panel label={`Draft from · ${tier.toLowerCase()}`} className="flex min-h-0 flex-1 flex-col p-4">
+    <Panel label={scouted ? `Scout Dossier · ${tier.toLowerCase()}` : `Draft from · ${tier.toLowerCase()}`} accent={scouted ? 'amber' : 'edge'} className="flex min-h-0 flex-1 flex-col p-4">
       <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate font-display text-lg font-semibold text-ink-bright">{club.club}</div>
-          <div className="text-[11px] text-ink/50">{club.season}{club.league ? ` · ${club.league}` : ''}</div>
+          <div className="flex items-center gap-2">
+            <div className="truncate font-display text-lg font-semibold text-ink-bright">{club.club}</div>
+            {scouted && <Stamp text={showRatings === 'OFF' ? 'Classified' : 'Scouted'} tone="amber" />}
+          </div>
+          <div className="text-[11px] text-ink/50">
+            {club.season}{club.league ? ` · ${club.league}` : ''}
+            {scouted && <span className="text-ink/35"> · {showRatings === 'OFF' ? 'no intel — ratings blacked out' : 'intel ranges · read with caution'}</span>}
+          </div>
         </div>
         <button disabled={busy || !canReroll} onClick={onReroll} className="shrink-0 border border-edge px-3 py-1.5 text-xs font-semibold tracking-wide text-ink/70 hover:border-amber hover:text-amber disabled:opacity-30">↻ Reroll</button>
       </div>
@@ -326,7 +338,7 @@ function SquadPanel({
                 disabled={!eligible || busy} onClick={() => onSelect(p)}
                 className={`flex h-full w-full items-start gap-2 border p-1.5 text-left transition ${isSel ? 'border-amber/60 bg-amber/10' : eligible ? 'border-edge hover:border-edge-bright' : 'border-edge/50 opacity-40'}`}
               >
-                <RatingBadge rating={p.rating} line={lineOf(p.positions[0] ?? 'CM')} size="md" />
+                <ScoutRating rating={p.rating} line={lineOf(p.positions[0] ?? 'CM')} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-ink-bright">{p.name}</div>
                   <div className="truncate text-[9px] text-ink/45">{p.nation}</div>

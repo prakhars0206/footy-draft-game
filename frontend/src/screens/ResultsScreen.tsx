@@ -2,11 +2,13 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { SeasonView, TeamRow } from '../api'
+import type { SpineGame } from '../season'
 import { Panel, Stamp } from '../components/primitives'
 import { TeamPitch } from '../components/TeamPitch'
-import { Distribution } from '../components/Distribution'
+import { ForecastCone } from '../components/ForecastCone'
+import { SeasonSpine } from '../components/SeasonSpine'
 
-export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView; pundit?: { correct: number; total: number } | null; onNewRun: () => void }) {
+export function ResultsScreen({ season, pundit, spine, onNewRun }: { season: SeasonView; pundit?: { correct: number; total: number } | null; spine?: SpineGame[]; onNewRun: () => void }) {
   const [tableView, setTableView] = useState<'actual' | 'projected'>('actual')
   const [team, setTeam] = useState<TeamRow | null>(null)
 
@@ -72,6 +74,14 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
         </Panel>
       </Reveal>
 
+      {spine && spine.length > 0 && (
+        <Reveal>
+          <Panel label="The Season · game by game" className="p-5">
+            <SeasonSpine games={spine} total={spine.length} />
+          </Panel>
+        </Reveal>
+      )}
+
       <Reveal>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile label="Record" value={`${season.won}-${season.drawn}-${season.lost}`} sub="W-D-L" />
@@ -110,10 +120,10 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
                 <div className="mt-1 text-[12px] text-ink/50">
                   your <span className="tabular-nums text-ink-bright">{season.points}</span> pts beat <span className="tabular-nums text-ink-bright">{season.monteCarlo.percentile}%</span> of the seasons this squad could have had
                 </div>
-                <div className="mt-4"><Distribution mc={season.monteCarlo} actual={season.points} height="h-24" /></div>
+                <div className="mt-5"><ForecastCone mc={season.monteCarlo} actual={season.points} height={72} /></div>
                 <div className="mt-2 flex gap-4 text-[10px] text-ink/45">
-                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber" />your season</span>
-                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-ink/45" />median ({season.monteCarlo.median})</span>
+                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 bg-amber" />your season</span>
+                  <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber/25" />likely range (p25–p75)</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-x-5 gap-y-2 self-center sm:grid-cols-1">
@@ -264,10 +274,10 @@ export function ResultsScreen({ season, pundit, onNewRun }: { season: SeasonView
                     <span className="font-display text-[13px] italic text-ink/60">percentile</span>
                   </div>
                   <div className="mt-1 text-[12px] text-ink/55">{team.points} pts beat <span className="tabular-nums text-ink-bright">{team.monteCarlo.percentile}%</span> of their possible seasons</div>
-                  <div className="mt-4"><Distribution mc={team.monteCarlo} actual={team.points} height="h-20" /></div>
+                  <div className="mt-5"><ForecastCone mc={team.monteCarlo} actual={team.points} height={64} /></div>
                   <div className="mt-2 flex gap-4 text-[10px] text-ink/45">
-                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber" />their season</span>
-                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-ink/45" />median ({team.monteCarlo.median})</span>
+                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 bg-amber" />their season</span>
+                    <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 bg-amber/25" />likely range</span>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-1 border-t border-edge pt-3">
                     <Mc label="Title" v={team.monteCarlo.title} />

@@ -98,15 +98,20 @@ export function SpinReveal({ spin, onPick }: { spin: SpinView; onPick: (club: Sp
               {st.tagline}
             </motion.div>
 
-            <div className="eyebrow mt-5 text-ink/45">Choose your club — this is final</div>
-            <div className="mt-2 w-full space-y-2">
+            <div className="eyebrow mt-5 text-ink/45">Choose your club · this is final</div>
+            <div className="mt-3 flex w-full flex-col gap-2.5">
               {spin.clubs.map((c, i) => (
                 <motion.button
                   key={c.club + c.season}
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.09 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.12 + i * 0.08, duration: 0.32, ease: [0.33, 1, 0.68, 1] }}
+                  whileHover={{ x: 3 }}
                   onClick={() => onPick(c)}
-                  className={`flex w-full items-center justify-between gap-3 border ${st.border} px-4 py-3 text-left transition hover:bg-panel-2`}
+                  className={`group relative flex w-full items-center justify-between gap-3 overflow-hidden border ${st.border} bg-panel/60 px-4 py-3.5 text-left transition hover:bg-panel-2`}
                 >
+                  {/* a quiet tier-coloured edge */}
+                  <span className="absolute inset-y-0 left-0 w-[3px]" style={{ background: `rgba(${st.rgb},0.7)` }} />
                   <div className="min-w-0">
                     <div className={`truncate font-display text-xl font-semibold ${st.text}`}>{c.club}</div>
                     <div className="truncate text-[11px] text-ink/50">{c.season}{c.league ? ` · ${c.league}` : ''}</div>

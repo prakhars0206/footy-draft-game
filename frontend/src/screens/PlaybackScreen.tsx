@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { MatchResult, SeasonReplay } from '../api'
 import { Panel, Stamp } from '../components/primitives'
+import { SeasonSpine } from '../components/SeasonSpine'
+import { userSpine } from '../season'
 import { detectScenario, lastName } from '../predictions'
 import type { Scenario } from '../predictions'
 
@@ -68,6 +70,9 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
   const matches = [...day.matches].sort((a, b) => Number(b.userMatch) - Number(a.userMatch))
   const userMatch = day.matches.find((m) => m.userMatch)
   const predicting = !!(prediction && userMatch)
+  // Your season so far, as a spine. While predicting we hide the current result so the ribbon can't spoil the call.
+  const spine = userSpine(replay)
+  const spineGames = spine.slice(0, predicting ? md : md + 1)
 
   // While predicting we show the PRE-match standings (so the table doesn't leak the result) and highlight the
   // fixture's two teams; otherwise the live (post-matchday) table with movement + next fixtures.
@@ -103,6 +108,11 @@ export function PlaybackScreen({ replay, onFinish }: { replay: SeasonReplay; onF
             <Ctrl onClick={() => onFinish(pundit)} label="⏭ SKIP" />
           </div>
         )}
+      </div>
+
+      {/* the spine of the season — your run, building game by game */}
+      <div className="shrink-0 border border-edge bg-panel/40 px-3 py-2">
+        <SeasonSpine games={spineGames} total={total} animate height="h-5" />
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_minmax(360px,440px)]">
