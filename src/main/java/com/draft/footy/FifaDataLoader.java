@@ -93,6 +93,17 @@ public final class FifaDataLoader {
         return m;
     }
 
+    /**
+     * Per-edition overall offset that puts every edition on the modern (FIFA 17+) rating scale. Tracking the same
+     * players across consecutive editions shows the median rating was flat through FIFA 07–15, stepped up across
+     * the FIFA 15→16→17 transition, then flat again — i.e. EA inflated ratings once, not gradually. We undo that
+     * so a club's strength is comparable across eras (tiers, sim, projection all read the adjusted overall).
+     * Currently +2 for FIFA ≤15, +1 for FIFA 16, 0 for FIFA 17+.
+     */
+    private static int eraOffset(int edition) {
+        return edition <= 15 ? 2 : edition == 16 ? 1 : 0;
+    }
+
     /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
     private static String cleanName(String s) {
         s = s.trim();
@@ -188,8 +199,9 @@ public final class FifaDataLoader {
                         .map(s -> s.equals("SW") ? "CB" : s).distinct().collect(Collectors.toList());
                     String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
+                    int overall = Math.min(99, parseIntLoose(f[iOverall]) + eraOffset(edition));
                     Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), nation,
-                        positions, parseIntLoose(f[iOverall]), dob);
+                        positions, overall, dob);
 
                     String club = f[iClub];
                     String key = club + "|" + season;
@@ -232,7 +244,7 @@ public final class FifaDataLoader {
                 if (f.length <= maxNeeded) continue;
                 if (!MODERN_TOP5_NAMES.contains(f[iLg].trim())) continue; // strict: top-5 European top flights only
                 try {
-                    int overall = parseIntLoose(f[iOvr]);
+                    int overall = Math.min(99, parseIntLoose(f[iOvr]) + eraOffset(edition)); // no-op for FC 25/26
                     List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
                     if (positions.isEmpty()) continue;
                     int id = (iId >= 0 && iId < f.length && !f[iId].isBlank()) ? parseIntLoose(f[iId]) : synthId--;
