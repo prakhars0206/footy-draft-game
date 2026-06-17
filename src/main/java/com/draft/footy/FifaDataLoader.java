@@ -119,6 +119,22 @@ public final class FifaDataLoader {
         return overall >= 87 ? Math.min(step, 1) : step;
     }
 
+    /**
+     * Map a sofifa position to one a formation actually fields. No formation has a CF/LF/RF/SW slot, so a player
+     * listed only as e.g. "CF" (FIFA-14 Messi) could never be placed in the best XI and was silently benched —
+     * and couldn't be drafted into any slot. Centre-forward → striker, the wide forwards → the wingers, sweeper
+     * → centre-back. (After mapping, the position list is de-duped by the callers.)
+     */
+    private static String normPos(String p) {
+        return switch (p) {
+            case "CF" -> "ST";
+            case "LF" -> "LW";
+            case "RF" -> "RW";
+            case "SW" -> "CB";
+            default -> p;
+        };
+    }
+
     /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
     private static String cleanName(String s) {
         s = s.trim();
@@ -207,11 +223,10 @@ public final class FifaDataLoader {
                     if (edition < 0) continue; // no version column and no default — cannot label the season
                     String season = seasonFor(edition);
 
-                    // "SW" (sweeper) was a real position in FIFA 07–11 but no formation fields one — treat it as
-                    // a centre-back (which it effectively is) so those players are placeable and line up as DEF.
+                    // Map positions with no formation slot (CF/LF/RF/SW) to their slot equivalents — see normPos.
                     List<String> positions = Arrays.stream(f[iPos].split(","))
                         .map(String::trim).filter(s -> !s.isEmpty())
-                        .map(s -> s.equals("SW") ? "CB" : s).distinct().collect(Collectors.toList());
+                        .map(FifaDataLoader::normPos).distinct().collect(Collectors.toList());
                     String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
                     int raw = parseIntLoose(f[iOverall]);
@@ -278,14 +293,15 @@ public final class FifaDataLoader {
         return group(byKey, keyMeta);
     }
 
-    /** Combine the primary position with any alternates ("LW" or "['RW', 'LM']") into a clean, de-duped list. */
+    /** Combine the primary position with any alternates ("LW" or "['RW', 'LM']") into a clean, de-duped list,
+     *  mapping CF/LF/RF/SW onto fieldable slots (see normPos). */
     private static List<String> modernPositions(String primary, String alt) {
         List<String> out = new ArrayList<>();
-        String p = primary.trim();
+        String p = normPos(primary.trim());
         if (!p.isEmpty()) out.add(p);
         for (String a : alt.replaceAll("[\\[\\]'\"]", " ").split(",")) {
-            a = a.trim();
-            if (!a.isEmpty() && !out.contains(a)) out.add(a);
+            String na = normPos(a.trim());
+            if (!na.isEmpty() && !out.contains(na)) out.add(na);
         }
         return out;
     }
