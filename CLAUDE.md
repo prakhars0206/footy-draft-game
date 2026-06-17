@@ -9,13 +9,15 @@ A from-scratch football draft + season-simulation game (personal/educational; in
 ## Build / run
 
 ```bash
-# data: editions FIFA 15 → EA FC 26 (Kaggle-only, all *.csv git-ignored). DataSeeder reads the
-# comma-separated `footy.data.csv` list: a sofifa multi-edition export (data/fc_24.csv spans FIFA 15–FC 24) +
-# the newer EA-FC "ratings export" schema per edition (data/fc_25.csv:25, data/EAFC26-Men.csv:26). A 2nd bare
-# path (e.g. legacy male_players_all.csv, FIFA 15–23) is auto-skipped to avoid duplicate editions.
-# The schema-flexible loader also still reads a legacy single-season file, e.g.:
-#   curl -L -o players_22.csv \
-#     https://raw.githubusercontent.com/abineshta/FIFA-22-complete-player-dataset-EDA/main/players_22.csv
+# data: editions FIFA 07 → EA FC 26 (sofifa, all *.csv git-ignored). DataSeeder reads the comma-separated
+# `footy.data.csv` list (each entry a bare multi-edition export or `path:NN` single-edition) and dedups by
+# SEASON — an earlier file wins, so male_players_all owns the clean 15–23, fc_24 adds only its unique 24,
+# fc_25_sofifa=25, EAFC26-Men=26, and the manually-scraped Scraped_data_new/fifa_07..14 add 07–14. Missing
+# files are skipped (a clone without the CSVs still boots). ~1,952 top-5 club-seasons / 20 editions / ~58k.
+# Era-normalisation: sofifa inflated ratings once across FIFA 15→16→17 (measured by same-player median drift),
+# so FifaDataLoader.eraOffset lifts older editions onto the modern scale — mid +2 (FIFA ≤15) / +1 (FIFA 16),
+# tapering to 0 at 89+ so the 94 ceiling is preserved (no 96-rated players). DISPLAYED FIFA 07–16 ratings are
+# therefore era-adjusted, not raw sofifa (only sub-89 lifted). See the calibration section.
 
 mvn spring-boot:run                                   # API on :8080 (loads data/male_players_all.csv)
 curl "http://localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42"
@@ -42,7 +44,7 @@ javac -d out src/main/java/com/draft/footy/*.java && java -cp out com.draft.foot
 ## Architecture
 
 - `com.draft.footy` — pure-Java engine, **no Spring imports** (keeps it unit-testable and portable):
-    - `FifaDataLoader` — CSV → top-5-league `ClubSeason`s, **two schemas**: (a) the **sofifa** schema (`loadAllSeasons` — column-alias resolver `player_id`|`sofifa_id`/`club_name`|`club`/…; top-5 by stable numeric `league_id` 13/53/31/19/16 with a name-alias fallback; per-row `fifa_version`; tolerant float parse so `24.0` works) and (b) the newer **EA-FC "ratings export"** schema (`loadModern(path, edition)` — `Name`/`OVR`/`Position`+`Alternative positions`/`League`/`Team`, no `league_id`/`fifa_version`; top flight by the sponsored league NAME, e.g. "LALIGA EA SPORTS"/"Serie A Enilive", which excludes 2nd tiers). `loadTop5(path, edition)` is the legacy single-season wrapper. **Spans FIFA 15 → EA FC 26** (≈1,185 club-seasons / 12 editions / ~35k players).
+    - `FifaDataLoader` — CSV → top-5-league `ClubSeason`s, **two schemas**: (a) the **sofifa** schema (`loadAllSeasons` — column-alias resolver `player_id`|`sofifa_id`/`club_name`|`club`/…; top-5 by stable numeric `league_id` 13/53/31/19/16 with a name-alias fallback; per-row `fifa_version`; tolerant float parse so `24.0` works) and (b) the newer **EA-FC "ratings export"** schema (`loadModern(path, edition)` — `Name`/`OVR`/`Position`+`Alternative positions`/`League`/`Team`, no `league_id`/`fifa_version`; top flight by the sponsored league NAME, e.g. "LALIGA EA SPORTS"/"Serie A Enilive", which excludes 2nd tiers). `loadEdition(path, edition)` auto-detects the schema (an `OVR` column ⇒ `loadModern`, else sofifa `load` at a fixed edition) for the `path:NN` entries. `parseIntLoose` reads a leading integer (handles `24.0` and sofifa's form-change suffix `87-1`→87); `SW` (sweeper) ⇒ `CB`; `eraOffset` era-normalises older editions (see the build note + calibration). **Spans FIFA 07 → EA FC 26** (≈1,952 club-seasons / 20 editions / ~58k players).
     - `PrimeIndex` — career-best ("Prime Mode") lookup: groups by `player_id`, keeps the peak-`overall` row (rating + positions from the **same** edition). Applied to the **user XI only** (invariant 6); a no-op on single-edition data.
     - `ClubSeason` / `Xi` — `optimalXi()` fields a club's best-fit XI: tries all 7 formations, picks the one with the most **natural-position** fits (overall tiebreak), cached. `buildXi(formation)` does an **optimal max bipartite matching** (Kuhn, strongest-first) — augmenting paths re-route already-placed players so a star is never benched when forwards share positions (the old greedy dropped e.g. Mbappé and under-rated elite clubs). Safe fallbacks keep keepers in goal. `Xi` carries attack/mid/def/gk sub-scores.
     - `OpponentPyramid` — 19 opponents sampled by **`optimalStrength()`** tier, bounded randomization, **deduped by club** (no two eras of the same club), sums to 19. Tier bounds are tuned in `TIERS`.

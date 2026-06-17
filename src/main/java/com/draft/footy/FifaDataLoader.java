@@ -94,14 +94,17 @@ public final class FifaDataLoader {
     }
 
     /**
-     * Per-edition overall offset that puts every edition on the modern (FIFA 17+) rating scale. Tracking the same
-     * players across consecutive editions shows the median rating was flat through FIFA 07–15, stepped up across
-     * the FIFA 15→16→17 transition, then flat again — i.e. EA inflated ratings once, not gradually. We undo that
-     * so a club's strength is comparable across eras (tiers, sim, projection all read the adjusted overall).
-     * Currently +2 for FIFA ≤15, +1 for FIFA 16, 0 for FIFA 17+.
+     * Overall offset that puts older editions on the modern (FIFA 17+) rating scale. EA inflated ratings once,
+     * across the FIFA 15→16→17 transition (same-player median drift was flat before and after) — but it was NOT
+     * uniform: the mid-tier rose ~+2 while elite players stayed pinned to the ceiling (the 94-rated never moved,
+     * and the player-overall distributions are identical at the top). So we taper — lift the mid, leave the top
+     * alone — which aligns club strength/tiers across eras without inventing 96-rated players. FIFA ≤15 gets the
+     * full step (+2 below 83, +1 at 83–88, 0 from 89), FIFA 16 the half step, FIFA 17+ nothing.
      */
-    private static int eraOffset(int edition) {
-        return edition <= 15 ? 2 : edition == 16 ? 1 : 0;
+    private static int eraOffset(int edition, int overall) {
+        if (edition >= 17 || overall >= 89) return 0; // modern scale, or an elite player already at the ceiling
+        int step = edition == 16 ? 1 : 2;             // full step for FIFA ≤15, half for FIFA 16
+        return overall >= 87 ? Math.min(step, 1) : step; // taper the top (87–88) so nothing leapfrogs the 89+ band
     }
 
     /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
@@ -199,7 +202,8 @@ public final class FifaDataLoader {
                         .map(s -> s.equals("SW") ? "CB" : s).distinct().collect(Collectors.toList());
                     String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
-                    int overall = Math.min(99, parseIntLoose(f[iOverall]) + eraOffset(edition));
+                    int raw = parseIntLoose(f[iOverall]);
+                    int overall = Math.min(99, raw + eraOffset(edition, raw));
                     Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), nation,
                         positions, overall, dob);
 
@@ -244,7 +248,8 @@ public final class FifaDataLoader {
                 if (f.length <= maxNeeded) continue;
                 if (!MODERN_TOP5_NAMES.contains(f[iLg].trim())) continue; // strict: top-5 European top flights only
                 try {
-                    int overall = Math.min(99, parseIntLoose(f[iOvr]) + eraOffset(edition)); // no-op for FC 25/26
+                    int rawOvr = parseIntLoose(f[iOvr]);
+                    int overall = Math.min(99, rawOvr + eraOffset(edition, rawOvr)); // no-op for FC 25/26
                     List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
                     if (positions.isEmpty()) continue;
                     int id = (iId >= 0 && iId < f.length && !f[iId].isBlank()) ? parseIntLoose(f[iId]) : synthId--;
