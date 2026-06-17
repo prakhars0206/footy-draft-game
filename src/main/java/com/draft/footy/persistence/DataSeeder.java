@@ -33,7 +33,7 @@ public class DataSeeder {
     // Comma-separated data sources, earlier wins overlapping seasons. A bare path = sofifa multi-edition export;
     // `path:NN` = the newer EA-FC "ratings export" schema for edition NN. male_players_all (clean 15–23) leads;
     // fc_24 (a messier export, only used for its unique edition 24) follows; then the modern FC 25/26 files.
-    @Value("${footy.data.csv:data/male_players_all.csv,data/fc_24.csv,data/fc_25_sofifa.csv:25,data/EAFC26-Men.csv:26}")
+    @Value("${footy.data.csv:data/male_players_all.csv,data/fc_24.csv,data/fc_25_sofifa.csv:25,data/EAFC26-Men.csv:26,data/Scraped_data_new/fifa_07.csv:7,data/Scraped_data_new/fifa_08.csv:8,data/Scraped_data_new/fifa_09.csv:9,data/Scraped_data_new/fifa_10.csv:10,data/Scraped_data_new/fifa_11.csv:11,data/Scraped_data_new/fifa_12.csv:12,data/Scraped_data_new/fifa_13.csv:13,data/Scraped_data_new/fifa_14.csv:14}")
     private String csvPaths;
 
     private final ClubSeasonRepository repo;

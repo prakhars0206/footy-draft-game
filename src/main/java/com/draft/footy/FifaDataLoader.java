@@ -72,11 +72,19 @@ public final class FifaDataLoader {
         return CLUB_ALIASES.getOrDefault(n, n);
     }
 
-    /** Tolerant int parse — handles the float-formatted columns ("24.0", "13.0") some EA FC exports use. */
+    /**
+     * Tolerant int parse — reads the leading integer and ignores any trailing noise: float-formatted columns
+     * ("24.0"→24) and sofifa's form-change suffix on overalls ("87-1"→87, "85+1"→85, i.e. rating 87 down one
+     * since the last update). Throws if there are no leading digits.
+     */
     private static int parseIntLoose(String s) {
         s = s.trim();
-        int dot = s.indexOf('.');
-        return Integer.parseInt(dot >= 0 ? s.substring(0, dot) : s);
+        int i = 0, n = s.length();
+        if (i < n && (s.charAt(i) == '-' || s.charAt(i) == '+')) i++; // optional leading sign
+        int start = i;
+        while (i < n && Character.isDigit(s.charAt(i))) i++;
+        if (i == start) throw new NumberFormatException("no leading integer in: " + s);
+        return Integer.parseInt(s.substring(0, i));
     }
 
     private static int max(int... xs) {
@@ -173,10 +181,14 @@ public final class FifaDataLoader {
                     if (edition < 0) continue; // no version column and no default — cannot label the season
                     String season = seasonFor(edition);
 
+                    // "SW" (sweeper) was a real position in FIFA 07–11 but no formation fields one — treat it as
+                    // a centre-back (which it effectively is) so those players are placeable and line up as DEF.
                     List<String> positions = Arrays.stream(f[iPos].split(","))
-                        .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+                        .map(String::trim).filter(s -> !s.isEmpty())
+                        .map(s -> s.equals("SW") ? "CB" : s).distinct().collect(Collectors.toList());
+                    String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
-                    Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), f[iNation],
+                    Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), nation,
                         positions, parseIntLoose(f[iOverall]), dob);
 
                     String club = f[iClub];
