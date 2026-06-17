@@ -101,11 +101,32 @@ public final class FifaDataLoader {
      * alone — which aligns club strength/tiers across eras without inventing 96-rated players. FIFA ≤15 gets the
      * full step (+2 below 83, +1 at 83–88, 0 from 89), FIFA 16 the half step, FIFA 17+ nothing.
      */
+    /** The active offset. Production uses {@link #flatOffset}; analysis tooling (TierReport) can swap it. */
+    static java.util.function.IntBinaryOperator eraOffsetFn = FifaDataLoader::flatOffset;
+
     private static int eraOffset(int edition, int overall) {
-        if (edition >= 17 || overall >= 89) return 0; // modern scale, or an elite player already at the ceiling
-        int step = edition == 16 ? 1 : 2;             // full step for FIFA ≤15, half for FIFA 16
-        return overall >= 87 ? Math.min(step, 1) : step; // taper the top (87–88) so nothing leapfrogs the 89+ band
+        return eraOffsetFn.applyAsInt(edition, overall);
     }
+
+    /**
+     * Committed scheme: a FLAT lift onto the modern scale — FIFA ≤15 +2, FIFA 16 +1, FIFA 17+ none. Because every
+     * card in an edition moves by the same amount, within-edition ranking order is preserved (we don't bump some
+     * cards and not others). The load-site cap at {@link #ERA_CAP} then keeps it sane at the very top: only a raw
+     * 94 in a +2 edition would exceed the cap (96 → 95), so prime Messi (95) still sits above everyone (≤94).
+     */
+    static int flatOffset(int edition, int overall) {
+        return edition <= 15 ? 2 : edition == 16 ? 1 : 0;
+    }
+
+    /** Earlier alternative, kept for the TierReport comparison: a ceiling-preserving taper (elite untouched). */
+    static int taperOffset(int edition, int overall) {
+        if (edition >= 17 || overall >= 89) return 0;
+        int step = edition == 16 ? 1 : 2;
+        return overall >= 87 ? Math.min(step, 1) : step;
+    }
+
+    /** Era-normalised ceiling: a +2 edition's raw-94 (prime Messi) lands at 95, one above the modern 94. */
+    private static final int ERA_CAP = 95;
 
     /** Clean a display name: trim and drop a trailing "-" export artifact (the fc_25_sofifa dump suffixes " -"). */
     private static String cleanName(String s) {
@@ -203,7 +224,7 @@ public final class FifaDataLoader {
                     String nation = iNation >= 0 && iNation < f.length ? f[iNation] : "";
                     String dob = iDob >= 0 && iDob < f.length ? f[iDob].trim() : "";
                     int raw = parseIntLoose(f[iOverall]);
-                    int overall = Math.min(99, raw + eraOffset(edition, raw));
+                    int overall = Math.min(ERA_CAP, raw + eraOffset(edition, raw));
                     Player p = new Player(parseIntLoose(f[iId]), cleanName(f[iName]), nation,
                         positions, overall, dob);
 
@@ -249,7 +270,7 @@ public final class FifaDataLoader {
                 if (!MODERN_TOP5_NAMES.contains(f[iLg].trim())) continue; // strict: top-5 European top flights only
                 try {
                     int rawOvr = parseIntLoose(f[iOvr]);
-                    int overall = Math.min(99, rawOvr + eraOffset(edition, rawOvr)); // no-op for FC 25/26
+                    int overall = Math.min(ERA_CAP, rawOvr + eraOffset(edition, rawOvr)); // no-op for FC 25/26
                     List<String> positions = modernPositions(f[iPos], iAlt >= 0 && iAlt < f.length ? f[iAlt] : "");
                     if (positions.isEmpty()) continue;
                     int id = (iId >= 0 && iId < f.length && !f[iId].isBlank()) ? parseIntLoose(f[iId]) : synthId--;
