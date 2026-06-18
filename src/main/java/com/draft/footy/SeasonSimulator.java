@@ -15,14 +15,14 @@ public final class SeasonSimulator {
      * season — leaves the long-run average (and the projection) intact while making a single season swing, so
      * teams genuinely over/under-perform. The drama dial: larger = more upsets/surprises.
      */
-    static final double FORM_SIGMA = 0.9;
+    static final double FORM_SIGMA = 0.78;
 
     /**
      * Player-of-the-Season team-success weight. The award scales a player's raw contribution (goals/assists/
      * clean sheets) by where their team finished — like the real PFA/Ballon d'Or, winners come from the top.
      * teamWeight = 1 + POTS_TEAM_WEIGHT·(N-pos)/(N-1): champion ×(1+W), bottom ×1. Larger = team matters more.
      */
-    static final double POTS_TEAM_WEIGHT = 0.55;
+    static final double POTS_TEAM_WEIGHT = 0.63;
 
     private final MatchEngine engine = new MatchEngine();
 

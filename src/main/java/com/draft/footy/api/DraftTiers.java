@@ -14,11 +14,11 @@ final class DraftTiers {
     record Tier(String label, int min, int max, int landingWeight) { }
 
     static final List<Tier> TIERS = List.of(
-        new Tier("ICONIC",   87, 99,  5),
-        new Tier("ELITE",    83, 86, 22),
-        new Tier("PEDIGREE", 78, 82, 40),
-        new Tier("STEADY",   72, 77, 26),
-        new Tier("MINNOW",   58, 71,  7)
+        new Tier("ICONIC",   87, 99,  6),
+        new Tier("ELITE",    83, 86, 18),
+        new Tier("PEDIGREE", 78, 82, 42),
+        new Tier("STEADY",   72, 77, 25),
+        new Tier("MINNOW",   58, 71,  9)
     );
 
     static String label(int strength) {
