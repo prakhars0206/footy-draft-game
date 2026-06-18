@@ -9,15 +9,15 @@ public final class MatchEngine {
 
     // --- Tunable calibration constants (see Demo calibration sweep) ---
     static final double BASE_GOALS = 1.15;  // league-average goals per team in a balanced game
-    static final double SCALE      = 15;  // how sharply strength gaps translate to goals (larger = gentler)
-    static final double HOME_ADV   = 3.5;   // home edge, in overall-rating points
+    static final double SCALE      = 16.5;  // how sharply strength gaps translate to goals (larger = gentler)
+    static final double HOME_ADV   = 3.6;   // home edge, in overall-rating points
     static final double MAX_LAMBDA = 2.5;   // clamp to avoid absurd blowouts
 
     // Dixon-Coles low-score correction: independent Poisson under-predicts 0-0/1-1 draws (scorelines are
     // correlated). RHO < 0 shifts mass from 1-0/0-1 into 0-0/1-1, lifting the draw rate to a realistic band.
     // Attribution is unchanged — this only shapes the scoreline. NOTE: coupled to points (more draws cost
     // favourites), so re-run the calibration sweep after touching it.
-    static final double RHO  = -0.20;
+    static final double RHO  = -0.11;
     static final int    GRID = 12;          // scoreline cap per side for the joint pmf (Poisson(4.5) tail beyond is ~0)
 
     public record GoalEvent(Player scorer, Player assist, int minute, boolean home) {}
