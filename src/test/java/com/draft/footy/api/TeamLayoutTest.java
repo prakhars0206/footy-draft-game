@@ -21,13 +21,13 @@ class TeamLayoutTest {
     @Test
     void ordersEveryFormationBackIntoFormationSlotOrder() {
         for (Formation f : Formation.values()) {
-            Xi xi = new Xi("Test FC 2020/21 (" + f.label() + ")");
+            Xi xi = new Xi("Test FC 2020/21", f);
             List<String> shuffled = new ArrayList<>(f.slots());
             Collections.reverse(shuffled); // build the XI in a non-formation order
             for (String pos : shuffled) xi.add(pos, player(pos));
 
             var ord = TeamLayout.inFormationOrder(xi);
-            assertEquals(f.label(), ord.formation(), "formation parsed from the label");
+            assertEquals(f.label(), ord.formation(), "formation comes from the Xi's formation field");
             assertEquals(f.slots(), ord.slots().stream().map(Xi.Slot::position).toList(),
                 f.label() + " should be re-ordered to its formation slot order");
         }

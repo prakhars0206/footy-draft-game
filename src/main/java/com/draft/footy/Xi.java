@@ -5,12 +5,13 @@ import java.util.List;
 
 /** A concrete eleven: each player assigned to a formation slot. Carries the team-strength numbers. */
 public final class Xi {
-    public final String name;          // club-season label or "Your XI"
+    public final String name;          // clean display label — club-season ("Liverpool 2020/21") or "Your XI"
+    public final Formation formation;  // the formation these slots are arranged for (a real field, not parsed from the name)
     public final List<Slot> slots = new ArrayList<>();
 
     public record Slot(String position, Line line, Player player) {}
 
-    public Xi(String name) { this.name = name; }
+    public Xi(String name, Formation formation) { this.name = name; this.formation = formation; }
 
     public void add(String position, Player p) { slots.add(new Slot(position, Line.of(position), p)); }
 

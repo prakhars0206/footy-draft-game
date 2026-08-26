@@ -29,7 +29,7 @@ public class SimulationService {
      * career-best snapshot (Prime Mode) — applied to the user XI only; opponents keep their sampled season.
      */
     private Xi buildXi(int targetOverall, Formation formation, boolean prime) {
-        Xi xi = new Xi("Your XI");
+        Xi xi = new Xi("Your XI", formation);
         Set<Integer> used = new HashSet<>();
         for (String slot : formation.slots()) {
             Player best = null; int bestDist = Integer.MAX_VALUE;

@@ -103,7 +103,7 @@ public final class ClubSeason {
             if (pick != null) { slotOf[i] = pick; used.add(pick.id()); }
         }
 
-        Xi xi = new Xi(label() + " (" + formation.label() + ")"); // formation in the name -> shows in the table
+        Xi xi = new Xi(label(), formation); // formation is a real field on the Xi (see TeamLayout)
         for (int i = 0; i < slots.size(); i++) if (slotOf[i] != null) xi.add(slots.get(i), slotOf[i]);
         return xi;
     }

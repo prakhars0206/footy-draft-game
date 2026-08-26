@@ -106,7 +106,7 @@ public final class Demo {
 
     /** Build an XI near a target overall by picking eligible players close to that rating for each slot. */
     private static Xi buildXi(List<Player> pool, int target, String name) {
-        Xi xi = new Xi(name);
+        Xi xi = new Xi(name, FORMATION);
         Set<Integer> used = new HashSet<>();
         for (String slot : FORMATION.slots()) {
             Player best = null; int bestDist = Integer.MAX_VALUE;

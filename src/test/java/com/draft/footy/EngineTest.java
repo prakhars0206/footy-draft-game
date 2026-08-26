@@ -56,7 +56,7 @@ class EngineTest {
     }
 
     private Xi buildXi(List<Player> pool, int target) {
-        Xi xi = new Xi("test");
+        Xi xi = new Xi("test", F);
         Set<Integer> used = new HashSet<>();
         for (String slot : F.slots()) {
             Player best = null; int bestDist = Integer.MAX_VALUE;
@@ -113,7 +113,7 @@ class EngineTest {
     @Test
     void opponentLeagueNeverRepeatsAClubAcrossEras() throws Exception {
         var clubs = clubs(); // multi-era pool
-        var club = java.util.regex.Pattern.compile("^(.*) \\d{4}/\\d{2} \\("); // "Liverpool 2020/21 (4-3-3)" -> "Liverpool"
+        var club = java.util.regex.Pattern.compile("^(.*) \\d{4}/\\d{2}$"); // "Liverpool 2020/21" -> "Liverpool"
         for (long seed = 0; seed < 30; seed++) {
             var league = new OpponentPyramid(clubs).generate(new Random(seed));
             java.util.Set<String> seen = new HashSet<>();

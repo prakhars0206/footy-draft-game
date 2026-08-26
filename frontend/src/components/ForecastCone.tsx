@@ -61,7 +61,7 @@ export function ForecastCone({
           >
             <div className="mx-auto h-full w-px bg-ink-bright" />
             <div className="absolute -top-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border border-ink-bright bg-amber" />
-            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap font-display text-[11px] font-bold tabular-nums text-ink-bright">
+            <div className="absolute -bottom-0.5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-sm border border-edge bg-panel px-1 py-px font-display text-[11px] font-bold leading-none tabular-nums text-ink-bright">
               {actual}
             </div>
           </motion.div>

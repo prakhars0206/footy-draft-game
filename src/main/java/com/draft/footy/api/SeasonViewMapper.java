@@ -109,7 +109,7 @@ public final class SeasonViewMapper {
             MonteCarloView teamMc = mc == null ? null
                 : cloudView(mc.teamClouds().get(s.team), mc.sims(), mc.teamClouds().get(s.team).percentile(s.points()));
             table.add(new TeamRow(i + 1, projPos.getOrDefault(s.team, i + 1), projPoints.getOrDefault(s.team, 0),
-                stripFormation(s.team.name), ord.formation(), s.team.overall(),
+                s.team.name, ord.formation(), s.team.overall(),
                 s.points(), s.won, s.drawn, s.lost, s.gf, s.ga, s.gd(), s.team == userXi, players, teamMc));
         }
 
@@ -149,18 +149,13 @@ public final class SeasonViewMapper {
         List<MatchdayView> mds = new ArrayList<>();
         for (var md : res.matchdays()) {
             List<MatchView> matches = md.matches().stream().map(m -> new MatchView(
-                stripFormation(m.home()), stripFormation(m.away()), m.homeGoals(), m.awayGoals(), m.userMatch(),
+                m.home(), m.away(), m.homeGoals(), m.awayGoals(), m.userMatch(),
                 m.goals().stream().map(g -> new GoalView(g.scorer(), g.minute(), g.home())).toList())).toList();
             List<SnapRowView> table = md.table().stream().map(s -> new SnapRowView(
-                stripFormation(s.team()), s.you(), s.played(), s.won(), s.drawn(), s.lost(),
+                s.team(), s.you(), s.played(), s.won(), s.drawn(), s.lost(),
                 s.gf(), s.ga(), s.gd(), s.points())).toList();
             mds.add(new MatchdayView(md.number(), matches, table));
         }
         return new SeasonReplayView(mds, toView(res, mc));
-    }
-
-    /** "Real Madrid CF 2018/19 (4-3-3)" -> "Real Madrid CF 2018/19" (the formation is its own field). */
-    private static String stripFormation(String name) {
-        return name.replaceAll(" \\([^)]*\\)$", "");
     }
 }

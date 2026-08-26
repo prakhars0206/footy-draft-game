@@ -121,7 +121,7 @@ public class DraftRunService {
         DraftRunEntity run = get(runId);
         if (!run.isComplete()) throw bad("draft incomplete: complete the XI before previewing the league");
         // Same seed → the same 19 teams simulate() will field (it generates with new Random(seed) first too).
-        List<Xi> league = new OpponentPyramid(catalog.clubs()).generate(new Random(run.getSeed()));
+        List<Xi> league = opponentsFor(run, new Random(run.getSeed()));
         int leagueMean = (int) Math.round(league.stream().mapToInt(Xi::overall).average().orElse(LeagueProjection.REF_MEAN));
         Xi userXi = buildUserXi(run);
         int userOverall = userXi.overall();
@@ -157,7 +157,7 @@ public class DraftRunService {
 
         Xi userXi = buildUserXi(run);
         Random rng = new Random(run.getSeed());
-        List<Xi> opponents = new OpponentPyramid(catalog.clubs()).generate(rng);
+        List<Xi> opponents = opponentsFor(run, rng);
         SeasonSimulator.SeasonResult result = new SeasonSimulator().simulate(userXi, opponents, rng);
         // Same opponents + same seed base as the pre-season preview → the debrief's odds/cloud match it exactly.
         MonteCarlo.Outcome mc = MonteCarlo.run(userXi, opponents, MC_SIMS, run.getSeed());
@@ -166,6 +166,19 @@ public class DraftRunService {
     }
 
     // --- helpers ---
+
+    /**
+     * The 19 opponents this run faces. The ONE place the league is built, so {@link #preview} (+ its Monte-Carlo)
+     * and {@link #simulate} always field the identical league when given an rng seeded the same way — the whole
+     * "the projection matches the played season" guarantee rests on this not being duplicated.
+     * <p>NB: the pool is {@code catalog.clubs()} (all eras), so opponents currently ignore the run's era/scope
+     * filter by design (the draft filters; opponents don't). To make the filter shape opponents too, swap in
+     * {@code catalog.eligibleClubSeasons(run.getLeagueScope(), run.getClassicLeague(), run.getEraFrom(),
+     * run.getEraTo())} here — and only here, keeping preview and simulate consistent.
+     */
+    private List<Xi> opponentsFor(DraftRunEntity run, Random rng) {
+        return new OpponentPyramid(catalog.clubs()).generate(rng);
+    }
 
     private static final int CHOICES = 3;                 // clubs offered per spin
     private record Spin(String tier, List<ClubSeason> clubs) { }
@@ -215,8 +228,8 @@ public class DraftRunService {
     }
 
     private Xi buildUserXi(DraftRunEntity run) {
-        // Carry the formation in the name so the post-sim team viewer lays the XI out correctly (not a default 4-3-3).
-        Xi xi = new Xi("Your XI (" + run.getFormation() + ")");
+        // The Xi carries its formation as a field, so the post-sim team viewer lays the XI out correctly.
+        Xi xi = new Xi("Your XI", run.formationEnum());
         for (DraftSlotEntity s : run.getSlots()) xi.add(s.getPosition(), s.toPlayer());
         return xi;
     }

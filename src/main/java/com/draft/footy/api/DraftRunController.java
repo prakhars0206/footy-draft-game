@@ -239,7 +239,7 @@ public class DraftRunController {
      * reflects only known players and leaks nothing — shown in every mode. A line with none drafted yet is null.
      */
     private StrengthView strength(DraftRunEntity run) {
-        Xi xi = new Xi("strength");
+        Xi xi = new Xi("strength", run.formationEnum());
         for (DraftSlotEntity s : run.getSlots()) if (s.isFilled()) xi.add(s.getPosition(), s.toPlayer());
         if (xi.slots.isEmpty()) return new StrengthView(null, null, null, null, null);
         return new StrengthView(xi.overall(),

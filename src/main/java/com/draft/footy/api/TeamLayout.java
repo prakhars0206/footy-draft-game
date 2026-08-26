@@ -18,8 +18,7 @@ public final class TeamLayout {
     public record Ordered(String formation, List<Xi.Slot> slots) { }
 
     public static Ordered inFormationOrder(Xi xi) {
-        String label = parseFormation(xi.name);
-        Formation f = byLabel(label);
+        Formation f = xi.formation;
         List<Xi.Slot> remaining = new ArrayList<>(xi.slots);
         List<Xi.Slot> ordered = new ArrayList<>();
         for (String pos : f.slots()) {
@@ -27,17 +26,6 @@ public final class TeamLayout {
                 .orElseGet(() -> remaining.isEmpty() ? null : remaining.get(0)); // fallback keeps it total
             if (match != null) { ordered.add(match); remaining.remove(match); }
         }
-        return new Ordered(label, ordered);
-    }
-
-    /** "Real Madrid CF 2018/19 (4-3-3)" -> "4-3-3". */
-    static String parseFormation(String name) {
-        int open = name.lastIndexOf('('), close = name.lastIndexOf(')');
-        return (open >= 0 && close > open) ? name.substring(open + 1, close) : "4-3-3";
-    }
-
-    static Formation byLabel(String label) {
-        for (Formation f : Formation.values()) if (f.label().equals(label)) return f;
-        return Formation.F_4_3_3;
+        return new Ordered(f.label(), ordered);
     }
 }
