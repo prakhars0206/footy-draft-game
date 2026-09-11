@@ -7,17 +7,9 @@ import java.util.Random;
 /** Simulates a single match: scoreline via Poisson, then attributes goals/assists to individual players. */
 public final class MatchEngine {
 
-    // --- Tunable calibration constants (see Demo calibration sweep) ---
-    static final double BASE_GOALS = 1.15;  // league-average goals per team in a balanced game
-    static final double SCALE      = 16.5;  // how sharply strength gaps translate to goals (larger = gentler)
-    static final double HOME_ADV   = 3.6;   // home edge, in overall-rating points
-    static final double MAX_LAMBDA = 2.5;   // clamp to avoid absurd blowouts
-
-    // Dixon-Coles low-score correction: independent Poisson under-predicts 0-0/1-1 draws (scorelines are
-    // correlated). RHO < 0 shifts mass from 1-0/0-1 into 0-0/1-1, lifting the draw rate to a realistic band.
-    // Attribution is unchanged — this only shapes the scoreline. NOTE: coupled to points (more draws cost
-    // favourites), so re-run the calibration sweep after touching it.
-    static final double RHO  = -0.11;
+    // Every constant below is MEASURED, not hand-tuned — see Calibration (fitted from ~36,000 real
+    // top-5-league matches) and GameBalance (the deliberately chosen playability knobs).
+    static final double RHO  = Calibration.RHO;
     static final int    GRID = 12;          // scoreline cap per side for the joint pmf (Poisson(4.5) tail beyond is ~0)
 
     public record GoalEvent(Player scorer, Player assist, int minute, boolean home) {}
@@ -35,8 +27,8 @@ public final class MatchEngine {
      * swing — the source of genuine over/under-performance drama.
      */
     public Result play(Xi home, Xi away, double homeForm, double awayForm, Random rng) {
-        double lambdaHome = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, +HOME_ADV);
-        double lambdaAway = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, -HOME_ADV);
+        double lambdaHome = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, true);
+        double lambdaAway = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, false);
         int[] score = sampleScore(lambdaHome, lambdaAway, rng);
         int hg = score[0], ag = score[1];
 
@@ -46,9 +38,23 @@ public final class MatchEngine {
         return new Result(home, away, hg, ag, events);
     }
 
-    private double lambda(double attack, double defence, double homeAdj) {
-        double diff = attack - defence + homeAdj;
-        return Math.min(BASE_GOALS * Math.exp(diff / SCALE), MAX_LAMBDA);
+    /**
+     * Expected goals for one side. This is the exact functional form the calibration was fitted to
+     * ({@link Calibration#MODEL_FORM}) — change it and the constants no longer describe it.
+     *
+     * <p>Two departures from the old hand-tuned version, both from the fit:
+     * <ul>
+     *   <li>Attack and defence get <b>separate scales</b>. Squad rating predicts attacking output much
+     *       more strongly than defensive solidity, so one shared SCALE mis-states both.</li>
+     *   <li>Home advantage applies to the <b>home rate only</b>, rather than as a symmetric bonus and
+     *       penalty. That's the Dixon-Coles formulation, and it's how the constant was estimated.</li>
+     * </ul>
+     */
+    static double lambda(double attack, double defence, boolean home) {
+        double logRate = (attack - Calibration.ATTACK_REF) / Calibration.SCALE_ATTACK
+                       - (defence - Calibration.DEFENCE_REF) / Calibration.SCALE_DEFENCE
+                       + (home ? Calibration.HOME_ADV_LOG : 0.0);
+        return Math.min(Calibration.BASE_GOALS * Math.exp(logRate), GameBalance.MAX_LAMBDA);
     }
 
     /**
@@ -56,8 +62,8 @@ public final class MatchEngine {
      * to run a whole season thousands of times (the Monte-Carlo "real bookies" projection).
      */
     public int[] fastScore(Xi home, Xi away, double homeForm, double awayForm, Random rng) {
-        double lh = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, +HOME_ADV);
-        double la = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, -HOME_ADV);
+        double lh = lambda(home.attackRating() + homeForm, away.defenceRating() + awayForm, true);
+        double la = lambda(away.attackRating() + awayForm, home.defenceRating() + homeForm, false);
         return sampleScore(lh, la, rng);
     }
 

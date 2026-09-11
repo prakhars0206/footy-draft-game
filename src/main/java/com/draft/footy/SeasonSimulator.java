@@ -13,9 +13,14 @@ public final class SeasonSimulator {
     /**
      * Season-form spread (in overall-rating points). Each team draws a mean-zero gaussian form for the whole
      * season — leaves the long-run average (and the projection) intact while making a single season swing, so
-     * teams genuinely over/under-perform. The drama dial: larger = more upsets/surprises.
+     * teams genuinely over/under-perform.
+     *
+     * <p>No longer a free dial. {@link Calibration#FORM_SIGMA} is measured from real clubs' year-to-year
+     * variation (net of both permanent club quality and the ~38-match estimation noise), and
+     * {@link GameBalance#FORM_SIGMA_MULTIPLIER} is the one knob that trades that realism for a game in
+     * which drafting well still shows up in the table.
      */
-    static final double FORM_SIGMA = 0.78;
+    static final double FORM_SIGMA = GameBalance.effectiveFormSigma();
 
     /**
      * Player-of-the-Season team-success weight. The award scales a player's raw contribution (goals/assists/

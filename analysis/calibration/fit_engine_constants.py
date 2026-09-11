@@ -102,17 +102,21 @@ def main() -> int:
     gp = json.loads((DATA / "global_params.json").read_text())
     gamma, rho = gp["gamma"], gp["rho"]
 
-    rating = np.array([float(r["overall"]) for r in rows])
-    r0 = rating.mean()
-    x = rating - r0
+    # Fit against the EXACT quantities MatchEngine feeds into lambda() — Xi.attackRating() and
+    # Xi.defenceRating() — not the XI's plain overall. Constants have to describe the function
+    # they'll be plugged into, or they're calibrating a model nobody runs.
+    att = np.array([float(r["attack_rating"]) for r in rows])
+    dfn = np.array([float(r["defence_rating"]) for r in rows])
+    att_ref, def_ref = att.mean(), dfn.mean()
     a = np.array([r["alpha"] for r in rows])
     b = np.array([r["beta"] for r in rows])
     groups = [r["season"] for r in rows]
 
-    print(f"{len(rows)} team-seasons.  mean squad overall = {r0:.2f} (the centring reference)\n")
-    print("Bridge fits (target = MLE-fitted strength, feature = centred squad overall):")
-    sa, a0, res_a, r2a = fit_one(x, a, groups, "attack")
-    sb, b0, res_b, r2b = fit_one(x, b, groups, "defence")
+    print(f"{len(rows)} team-seasons")
+    print(f"  centring references: attackRating {att_ref:.3f}, defenceRating {def_ref:.3f}\n")
+    print("Bridge fits (target = MLE strength, feature = the engine's own rating function):")
+    sa, a0, res_a, r2a = fit_one(att - att_ref, a, groups, "attack")
+    sb, b0, res_b, r2b = fit_one(dfn - def_ref, b, groups, "defence")
 
     # alpha/beta are estimated from ~38 matches each, so part of the spread we're trying to
     # explain is pure sampling noise. It doesn't bias the slopes, but it depresses R2 and
@@ -140,11 +144,13 @@ def main() -> int:
     print("    than individual ratings. The engine's single SCALE cannot represent it.")
 
     base_goals = float(np.exp(a0 + b0))
-    home_adv = float(gamma * scale)
 
     print(f"\n  BASE_GOALS = {base_goals:.4f}   (lambda for an average side vs an average side)")
-    print(f"  HOME_ADV   = {home_adv:.4f}   (gamma {gamma:+.4f} x SCALE {scale:.2f})")
+    print(f"  HOME_ADV   = {gamma:+.4f} log-goals   (x{np.exp(gamma):.3f} on the home rate)")
     print(f"  RHO        = {rho:+.4f}")
+    print("\n  Home advantage is kept in LOG-GOALS, not rating points. With two different scales")
+    print("  'rating points' is ambiguous, and Dixon-Coles applies it to the home rate only —")
+    print("  not as a symmetric bonus/penalty the way the engine does today.")
 
     print("\n  ! FINDING 2 (revised) — the weights are identified, but they are PREDICTIVE,")
     print("    not causal. Centred condition number is 5.5 and every VIF is under 6, so the")
@@ -158,10 +164,21 @@ def main() -> int:
     print("\n  FORM_SIGMA — stripping the club effect AND the measurement noise:")
     within_a = decompose_form(rows, res_a, noise_a, scale, "attack")
     within_b = decompose_form(rows, res_b, noise_b, scale, "defence")
-    form_sigma = float(np.mean([within_a, within_b]) * scale)
-    naive = float(np.mean([res_a.std(), res_b.std()]) * scale)
-    print(f"\n    FORM_SIGMA = {form_sigma:.2f} rating pts    "
-          f"(naive undecomposed residual would say {naive:.2f})")
+    form_within = float(np.mean([within_a, within_b]) * scale)
+    # Total unexplained spread, net of measurement noise but INCLUDING the persistent club effect.
+    total_a = np.sqrt(max(res_a.var() - noise_a, 1e-9))
+    total_b = np.sqrt(max(res_b.var() - noise_b, 1e-9))
+    form_total = float(np.mean([total_a, total_b]) * scale)
+    print(f"\n    within-club only : {form_within:.2f} rating pts")
+    print(f"    total unexplained: {form_total:.2f} rating pts")
+    print("\n  ! FINDING 4 — the GAME wants the TOTAL, not the within-club figure.")
+    print("    The two differ because real clubs have persistent quality the squad rating misses")
+    print("    (coaching, recruitment), which is separate from year-to-year form. But a drafted XI")
+    print("    has no history and plays one season: there is no second season for a persistent")
+    print("    component to be persistent ACROSS, so the distinction is meaningless in-game. What")
+    print("    matters is that the spread of outcomes matches reality, and that needs the total.")
+    print("    Using the within-club figure would make the game visibly flatter than football.")
+    form_sigma = form_total
 
     print("\n  ! FINDING 3 — your hand-tuned BASE_GOALS was nearly right.")
     print(f"    Fitted {base_goals:.3f} vs the engine's 1.15. SCALE and FORM_SIGMA are the two")
@@ -176,16 +193,28 @@ def main() -> int:
         f"# Bridge CV R2: attack {r2a:.3f}, defence {r2b:.3f} (raw);"
         f" {r2a / rel_a:.3f} / {r2b / rel_b:.3f} corrected for estimation noise in the target.",
         "#",
-        "# NOTE: attack and defence have genuinely different sensitivities to squad rating.",
-        "# 'scale' is the harmonic mean, for the engine's current single-SCALE model; the split",
-        "# values are exported too, should MatchEngine gain separate terms.",
+        "#",
+        "# model.form declares the lambda() these constants were fitted for. Calibration.java",
+        "# asserts the engine implements the same one — v1 constants in a v2 engine would be",
+        "# silently wrong physics rather than a crash.",
+        "#",
+        "#   lambda = BASE_GOALS * exp( (attackRating  - attack.reference ) / scale.attack",
+        "#                            - (defenceRating - defence.reference) / scale.defence",
+        "#                            + home.adv.loggoals   [home side only] )",
+        "#",
+        "# CONDITIONAL ON Xi's line weights. The features here are Xi.attackRating() and",
+        "# Xi.defenceRating() as they stand; change those weights and these constants must be",
+        "# refitted.",
         "# Xi's per-line weights are deliberately NOT exported. They ARE statistically identified,",
         "# but only as PREDICTIVE coefficients: good clubs are good everywhere, so defence predicts",
         "# attacking output. The engine needs causal weights, because the game builds unbalanced",
         "# cross-era XIs that a predictive fit extrapolates badly to. See refine_bridge.py.",
         "#",
-        "# form.sigma is net of BOTH the persistent club effect and the ~38-match estimation noise",
-        "# in alpha/beta. The raw residual would have said 4.65.",
+        "# form.sigma is the TOTAL unexplained spread net of the ~38-match estimation noise in",
+        "# alpha/beta. It deliberately INCLUDES the persistent club effect, because a drafted XI",
+        "# has no club history — see FINDING 4. form.sigma.withinclub is the narrower 'real form'",
+        "# figure, reported for interest; the game does not use it.",
+        "model.form=split-scale-v2",
         f"fitted.at={date.today().isoformat()}",
         f"fitted.matches={gp['n_matches']}",
         f"fitted.club.seasons={len(rows)}",
@@ -193,13 +222,14 @@ def main() -> int:
         f"scale={scale:.4f}",
         f"scale.attack={scale_att:.4f}",
         f"scale.defence={scale_def:.4f}",
-        f"home.adv={home_adv:.4f}",
         f"home.adv.loggoals={gamma:.4f}",
+        f"attack.reference={att_ref:.4f}",
+        f"defence.reference={def_ref:.4f}",
         f"rho={rho:.4f}",
         f"form.sigma={form_sigma:.4f}",
+        f"form.sigma.withinclub={form_within:.4f}",
         f"bridge.r2.attack={r2a / rel_a:.4f}",
         f"bridge.r2.defence={r2b / rel_b:.4f}",
-        f"rating.reference={r0:.4f}",
     ]
     PROPS.parent.mkdir(parents=True, exist_ok=True)
     PROPS.write_text("\n".join(props) + "\n")

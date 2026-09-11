@@ -6,27 +6,32 @@ public final class Projection {
     public record Odds(int expectedPoints, double winLeague, double top4, double top6, double top10, double relegation) {}
 
     /**
-     * Expected points from overall — least-squares fit to what teams ACTUALLY achieve in the current sim,
-     * averaged across both pools (75->~42, 80->~60, 86->~79, 90->~89, calibrated at SCALE=16 / MAX_LAMBDA=2.5
-     * so an elite 90-rated side lands at the real ~89-pt champion mark). Re-run `Demo data/male_players_all.csv`
-     * (and `Demo players_22.csv`) and refit whenever the MatchEngine constants move. Clamped to a realistic
-     * 38-game range (a runaway champion tops near 100, a doomed side bottoms out in the teens).
+     * Expected points from overall — least-squares fit to what teams actually achieve in the sim against the
+     * opponent pyramid (75->~45, 80->~58, 86->~72, 90->~81). Refit after the Dixon-Coles calibration landed;
+     * the curve is flatter than before because the fitted scales say strength gaps matter less than the old
+     * hand-tuned SCALE=16.5 assumed.
+     *
+     * <p><b>Demo path only.</b> {@code MonteCarlo} drives every live projection by simulating the user's exact
+     * season, so it tracks the engine automatically and needs no refit. This curve survives as the stateless
+     * {@code /api/season/demo} fallback. Re-derive with {@code Demo data/male_players_all.csv} if the
+     * constants move again.
      */
     public static int expectedPoints(int overall) {
-        double pts = 3.1 * overall - 189.0;
+        double pts = 2.35 * overall - 130.0;
         return (int) Math.round(Math.max(14, Math.min(100, pts)));
     }
 
     public static Odds odds(int overall) {
         int xp = expectedPoints(overall);
-        // Logistic bands keyed to real top-flight thresholds — a pre-season "what should happen" picture.
+        // Bands keyed to the pyramid league's own thresholds, which sit below real top-flight ones
+        // because that league is deliberately harsher than any real division.
         return new Odds(
             xp,
-            band(xp, 90, 6),    // win league (~88-92 pts usually takes it)
-            band(xp, 72, 7),    // top 4 (~70-74)
-            band(xp, 64, 8),    // top 6
-            band(xp, 50, 9),    // top 10
-            1 - band(xp, 36, 5) // relegation = below the ~36-38 survival line
+            band(xp, 80, 6),    // win league
+            band(xp, 65, 7),    // top 4
+            band(xp, 58, 8),    // top 6
+            band(xp, 47, 9),    // top 10
+            1 - band(xp, 34, 5) // relegation = below the survival line
         );
     }
 
