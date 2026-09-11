@@ -62,6 +62,7 @@ public final class HistoricalValidation {
 
         double sumAbsErr = 0, sumCorr = 0;
         int leaguesDone = 0, teamsDone = 0;
+        StringBuilder dump = new StringBuilder("league,season,club,simulated,actual\n");
 
         for (String[] t : TARGETS) {
             String key = t[0] + "|" + t[1];
@@ -102,8 +103,18 @@ public final class HistoricalValidation {
             System.out.printf("     %-26s actual %3.0f   sim %5.1f   (%+.1f)%n%n",
                 matched.get(worst).club(), actual[worst], predicted[worst], predicted[worst] - actual[worst]);
 
+            for (int i = 0; i < predicted.length; i++)
+                dump.append(String.format("%s,%s,%s,%.2f,%d%n",
+                    t[0], t[1], matched.get(i).club().replace(",", ";"), predicted[i], (int) actual[i]));
+
             spread(xis, actual, t[0] + " " + t[1]);
             sumAbsErr += mae; sumCorr += corr; leaguesDone++; teamsDone += xis.size();
+        }
+
+        Path out = Path.of("analysis/calibration/data/validation.csv");
+        if (Files.isDirectory(out.getParent())) {
+            Files.writeString(out, dump.toString());
+            System.out.println("wrote " + out + " (for the plots)\n");
         }
 
         if (leaguesDone == 0) return;
