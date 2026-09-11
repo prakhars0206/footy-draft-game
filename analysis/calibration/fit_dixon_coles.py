@@ -190,6 +190,52 @@ def build_blocks(fixtures: dict):
     return blocks
 
 
+def num_hessian(f, x, eps=1e-4):
+    """Central-difference Hessian. n is ~39 per block, so ~3k cheap evaluations — fine."""
+    n = len(x)
+    H = np.zeros((n, n))
+    fx = f(x)
+    for i in range(n):
+        xp = x.copy(); xp[i] += eps
+        xm = x.copy(); xm[i] -= eps
+        H[i, i] = (f(xp) - 2 * fx + f(xm)) / eps ** 2
+    for i in range(n):
+        for j in range(i + 1, n):
+            pp = x.copy(); pp[i] += eps; pp[j] += eps
+            pm = x.copy(); pm[i] += eps; pm[j] -= eps
+            mp = x.copy(); mp[i] -= eps; mp[j] += eps
+            mm = x.copy(); mm[i] -= eps; mm[j] -= eps
+            H[i, j] = H[j, i] = (f(pp) - f(pm) - f(mp) + f(mm)) / (4 * eps ** 2)
+    return H
+
+
+def standard_errors(b, x, gamma, rho):
+    """
+    Per-team standard errors on alpha and beta, from the inverse Hessian of the block likelihood.
+
+    These matter more than they look. alpha is estimated from ~38 matches, so it carries real
+    sampling noise — and when M4 regresses squad rating ON alpha, that noise lands in the residual.
+    It does NOT bias the slope (measurement error in the target never does), but it does two things
+    that change how the results read: it depresses R2, and it inflates FORM_SIGMA. Exporting the SEs
+    lets fit_engine_constants.py correct for both.
+
+    The last alpha isn't a free parameter (sum-to-zero), so its variance comes from propagating the
+    covariance of the n-1 free ones through alpha_n = -sum(free).
+    """
+    n = b["n_teams"]
+    H = num_hessian(lambda v: block_nll(v, b, gamma, rho), x)
+    try:
+        C = np.linalg.inv(H)
+    except np.linalg.LinAlgError:
+        return np.full(n, np.nan), np.full(n, np.nan)
+
+    A = np.vstack([np.eye(n - 1), -np.ones(n - 1)])       # free alphas -> all n alphas
+    cov_a = A @ C[:n - 1, :n - 1] @ A.T
+    se_a = np.sqrt(np.maximum(np.diag(cov_a), 0))
+    se_b = np.sqrt(np.maximum(np.diag(C[n - 1:, n - 1:]), 0))
+    return se_a, se_b
+
+
 def unpack(blocks, xs):
     """Per-block parameter vectors -> (block, alpha, beta), re-applying the sum-to-zero constraint."""
     out = []
@@ -228,9 +274,15 @@ def main() -> int:
     print(f"  rho   (low-score correction) = {rho:+.4f}")
 
     # ---- sanity check: do fitted attack ranks track the real table? ----
+    print("\ncomputing standard errors (inverse Hessian per block)…", flush=True)
+    ses = [standard_errors(b, x, gamma, rho) for b, x in zip(blocks, xs)]
+    all_se_a = np.concatenate([s[0] for s in ses])
+    print(f"  alpha SE: median {np.nanmedian(all_se_a):.4f}  "
+          f"(vs a between-team alpha spread of "
+          f"{np.std([a for _, al, _ in fitted for a in al]):.4f})")
+
     rows, rhos = [], []
-    gamma_by_season = defaultdict(list)
-    for b, alpha, beta in fitted:
+    for (b, alpha, beta), (se_a, se_b) in zip(fitted, ses):
         pts = defaultdict(int)
         for hi, ai, hg, ag in zip(b["hi"], b["ai"], b["hg"], b["ag"]):
             if hg > ag:
@@ -242,13 +294,14 @@ def main() -> int:
         strength = alpha - beta              # net strength: good attack, good (low) defence
         table = [pts[i] for i in range(b["n_teams"])]
         rhos.append(spearmanr(strength, table).statistic)
-        gamma_by_season[b["season"]].append(None)
 
         for i, t in enumerate(b["teams"]):
             rows.append({
                 "league": b["league"], "season": b["season"], "result_name": t,
                 "alpha": round(float(alpha[i]), 6),
                 "beta": round(float(beta[i]), 6),
+                "alpha_se": round(float(se_a[i]), 6),
+                "beta_se": round(float(se_b[i]), 6),
                 "net_strength": round(float(alpha[i] - beta[i]), 6),
                 "points": table[i],
             })

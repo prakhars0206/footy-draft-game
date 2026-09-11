@@ -1,0 +1,17 @@
+{
+  "gamma": 0.25788837273796605,
+  "rho": -0.06620230029123207,
+  "n_matches": 36197,
+  "n_league_seasons": 100,
+  "nll": 59938.135412061536,
+  "converged": true,
+  "outer_iterations": 9,
+  "spearman_mean": 0.9436539508319002,
+  "leagues": [
+    "bundesliga",
+    "laliga",
+    "ligue1",
+    "prem",
+    "seriea"
+  ]
+}

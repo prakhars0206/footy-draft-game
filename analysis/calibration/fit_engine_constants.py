@@ -53,8 +53,8 @@ def load_joined() -> list[dict]:
         s = strengths.get((r["league"], r["season"], r["result_name"]))
         if s is None:
             continue
-        r["alpha"] = float(s["alpha"])
-        r["beta"] = float(s["beta"])
+        for k in ("alpha", "beta", "alpha_se", "beta_se"):
+            r[k] = float(s[k])
         rows.append(r)
     return rows
 
@@ -71,14 +71,16 @@ def fit_one(x, y, groups, label):
     return m.coef_[0], m.intercept_, resid, cv_r2
 
 
-def decompose_form(rows, resid, scale):
+def decompose_form(rows, resid, noise_var, scale, label):
     """
-    Split the unexplained variance into a PERSISTENT club effect and a YEAR-TO-YEAR one.
+    Strip TWO contaminants out of the residual before calling what's left "form".
 
-    This matters because FORM_SIGMA is meant to be "the same squad having a good or bad year", but
-    a raw residual also contains everything permanently unmodelled about a club — Atletico under
-    Simeone systematically out-defending their ratings is not form, it's a missing feature. Only
-    the within-club component is form, so lumping them together inflates FORM_SIGMA badly.
+    1. A persistent club effect. Atletico under Simeone systematically out-defending their ratings
+       is not form, it's a permanently missing feature. Only the WITHIN-club part is form.
+    2. Measurement error. alpha is estimated from ~38 matches and carries sampling noise of its
+       own (see refine_bridge.py); that noise is in the residual too and is not form either.
+
+    Leaving either in inflates FORM_SIGMA substantially — together they roughly double it.
     """
     by_club = defaultdict(list)
     for r, e in zip(rows, resid):
@@ -87,13 +89,12 @@ def decompose_form(rows, resid, scale):
     repeat = {c: v for c, v in by_club.items() if len(v) >= 4}   # need a few seasons to split
     club_means = np.array([np.mean(v) for v in repeat.values()])
     within = np.concatenate([np.array(v) - np.mean(v) for v in repeat.values()])
+    within_sd_corrected = np.sqrt(max(within.var() - noise_var, 1e-9))
 
-    between_sd = club_means.std()
-    within_sd = within.std()
-    print(f"    {len(repeat)} clubs with 4+ seasons — "
-          f"persistent club effect sd {between_sd:.4f}, year-to-year sd {within_sd:.4f} "
-          f"({within_sd * scale:.2f} rating pts)")
-    return within_sd, between_sd
+    print(f"    {label:<8} {len(repeat)} clubs w/ 4+ seasons | persistent club effect "
+          f"{club_means.std():.4f} | year-to-year {within.std():.4f} "
+          f"-> {within_sd_corrected:.4f} net of noise  ({within_sd_corrected * scale:.2f} pts)")
+    return within_sd_corrected
 
 
 def main() -> int:
@@ -112,6 +113,17 @@ def main() -> int:
     print("Bridge fits (target = MLE-fitted strength, feature = centred squad overall):")
     sa, a0, res_a, r2a = fit_one(x, a, groups, "attack")
     sb, b0, res_b, r2b = fit_one(x, b, groups, "defence")
+
+    # alpha/beta are estimated from ~38 matches each, so part of the spread we're trying to
+    # explain is pure sampling noise. It doesn't bias the slopes, but it depresses R2 and
+    # inflates the residual — and FORM_SIGMA comes out of that residual. Correct for both.
+    noise_a = float(np.mean(np.array([float(r["alpha_se"]) for r in rows]) ** 2))
+    noise_b = float(np.mean(np.array([float(r["beta_se"]) for r in rows]) ** 2))
+    rel_a, rel_b = 1 - noise_a / a.var(), 1 - noise_b / b.var()
+    print(f"\n  measurement error: {100 * (1 - rel_a):.1f}% of attack variance and "
+          f"{100 * (1 - rel_b):.1f}% of defence variance is estimation noise")
+    print(f"  R2 corrected for it: attack {r2a:.3f} -> {r2a / rel_a:.3f}, "
+          f"defence {r2b:.3f} -> {r2b / rel_b:.3f}")
 
     scale_att = 1.0 / sa
     scale_def = -1.0 / sb
@@ -134,20 +146,22 @@ def main() -> int:
     print(f"  HOME_ADV   = {home_adv:.4f}   (gamma {gamma:+.4f} x SCALE {scale:.2f})")
     print(f"  RHO        = {rho:+.4f}")
 
-    print("\n  FORM_SIGMA — decomposing the residual:")
-    within_a, between_a = decompose_form(rows, res_a, scale)
-    within_b, between_b = decompose_form(rows, res_b, scale)
+    print("\n  ! FINDING 2 (revised) — the weights are identified, but they are PREDICTIVE,")
+    print("    not causal. Centred condition number is 5.5 and every VIF is under 6, so the")
+    print("    earlier 'unidentifiable' call was wrong (it quoted an uncentred condition number).")
+    print("    Defence genuinely predicts attacking output at t=5.6 — because good clubs are good")
+    print("    everywhere. The engine needs the CAUSAL weights, since the game builds unbalanced")
+    print("    cross-era XIs that a predictive coefficient extrapolates badly to. Fixed effects")
+    print("    can't recover them either (R2 collapses to 0.09). So: keep Xi's hand-set weights.")
+    print("    Run refine_bridge.py for the full workings. Not exported.")
+
+    print("\n  FORM_SIGMA — stripping the club effect AND the measurement noise:")
+    within_a = decompose_form(rows, res_a, noise_a, scale, "attack")
+    within_b = decompose_form(rows, res_b, noise_b, scale, "defence")
     form_sigma = float(np.mean([within_a, within_b]) * scale)
     naive = float(np.mean([res_a.std(), res_b.std()]) * scale)
-    print(f"    FORM_SIGMA = {form_sigma:.3f} rating pts   "
-          f"(a naive undecomposed residual would say {naive:.2f} — inflated by the club effect)")
-
-    print("\n  ! FINDING 2 — the per-line weights are NOT identifiable from this data.")
-    print("    mean_att/mid/def/gk correlate 0.69-0.87 (condition number 113), so a regression")
-    print("    splits the coefficient arbitrarily across them — it hands defenders as much credit")
-    print("    for attack as midfielders. The TOTAL sensitivity is well determined; the split is")
-    print("    not. Keeping Xi's hand-set weights is the honest call; they are at least")
-    print("    structurally sensible. Not exported.")
+    print(f"\n    FORM_SIGMA = {form_sigma:.2f} rating pts    "
+          f"(naive undecomposed residual would say {naive:.2f})")
 
     print("\n  ! FINDING 3 — your hand-tuned BASE_GOALS was nearly right.")
     print(f"    Fitted {base_goals:.3f} vs the engine's 1.15. SCALE and FORM_SIGMA are the two")
@@ -159,13 +173,19 @@ def main() -> int:
         "#                                        -> fit_engine_constants",
         f"# Dixon-Coles MLE over {gp['n_matches']} matches / {gp['n_league_seasons']} league-seasons,",
         f"# top-5 leagues 2006/07-2025/26, then a bridge regression onto {len(rows)} FIFA squads.",
-        f"# Bridge CV R2: attack {r2a:.3f}, defence {r2b:.3f}.",
+        f"# Bridge CV R2: attack {r2a:.3f}, defence {r2b:.3f} (raw);"
+        f" {r2a / rel_a:.3f} / {r2b / rel_b:.3f} corrected for estimation noise in the target.",
         "#",
         "# NOTE: attack and defence have genuinely different sensitivities to squad rating.",
         "# 'scale' is the harmonic mean, for the engine's current single-SCALE model; the split",
         "# values are exported too, should MatchEngine gain separate terms.",
-        "# Xi's per-line weights are deliberately NOT exported — collinear features make them",
-        "# unidentifiable (see FINDING 2 in fit_engine_constants.py).",
+        "# Xi's per-line weights are deliberately NOT exported. They ARE statistically identified,",
+        "# but only as PREDICTIVE coefficients: good clubs are good everywhere, so defence predicts",
+        "# attacking output. The engine needs causal weights, because the game builds unbalanced",
+        "# cross-era XIs that a predictive fit extrapolates badly to. See refine_bridge.py.",
+        "#",
+        "# form.sigma is net of BOTH the persistent club effect and the ~38-match estimation noise",
+        "# in alpha/beta. The raw residual would have said 4.65.",
         f"fitted.at={date.today().isoformat()}",
         f"fitted.matches={gp['n_matches']}",
         f"fitted.club.seasons={len(rows)}",
@@ -177,6 +197,8 @@ def main() -> int:
         f"home.adv.loggoals={gamma:.4f}",
         f"rho={rho:.4f}",
         f"form.sigma={form_sigma:.4f}",
+        f"bridge.r2.attack={r2a / rel_a:.4f}",
+        f"bridge.r2.defence={r2b / rel_b:.4f}",
         f"rating.reference={r0:.4f}",
     ]
     PROPS.parent.mkdir(parents=True, exist_ok=True)
