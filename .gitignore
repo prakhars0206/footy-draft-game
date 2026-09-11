@@ -16,3 +16,7 @@ out/
 
 # Aider tool artifacts
 .aider*
+
+# Python venv for the offline calibration pipeline
+.venv/
+__pycache__/
