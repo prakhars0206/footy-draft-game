@@ -62,7 +62,7 @@ public final class HistoricalValidation {
 
         double sumAbsErr = 0, sumCorr = 0;
         int leaguesDone = 0, teamsDone = 0;
-        StringBuilder dump = new StringBuilder("league,season,club,simulated,actual\n");
+        StringBuilder dump = new StringBuilder("league,season,club,simulated,actual,p10,p90\n");
 
         for (String[] t : TARGETS) {
             String key = t[0] + "|" + t[1];
@@ -80,7 +80,8 @@ public final class HistoricalValidation {
 
             if (xis.size() < 16) { System.out.println("only " + xis.size() + " clubs for " + key + " — skipped"); continue; }
 
-            double[] predicted = averagePoints(xis, SIMS);
+            double[][] dist = pointsDistribution(xis, SIMS);
+            double[] predicted = dist[0];
             double[] actual = matched.stream().mapToDouble(Real::points).toArray();
 
             double mae = 0;
@@ -104,8 +105,9 @@ public final class HistoricalValidation {
                 matched.get(worst).club(), actual[worst], predicted[worst], predicted[worst] - actual[worst]);
 
             for (int i = 0; i < predicted.length; i++)
-                dump.append(String.format("%s,%s,%s,%.2f,%d%n",
-                    t[0], t[1], matched.get(i).club().replace(",", ";"), predicted[i], (int) actual[i]));
+                dump.append(String.format("%s,%s,%s,%.2f,%d,%.0f,%.0f%n",
+                    t[0], t[1], matched.get(i).club().replace(",", ";"), predicted[i], (int) actual[i],
+                    dist[1][i], dist[2][i]));
 
             spread(xis, actual, t[0] + " " + t[1]);
             sumAbsErr += mae; sumCorr += corr; leaguesDone++; teamsDone += xis.size();
@@ -180,10 +182,18 @@ public final class HistoricalValidation {
             100.0 * drawSum / games, (double) goalSum / games);
     }
 
-    /** Mean points per team over {@code sims} simulated seasons of this exact league. */
-    private static double[] averagePoints(List<Xi> teams, int sims) {
+    /**
+     * Per-team points across {@code sims} simulated seasons: {mean, p10, p90}.
+     *
+     * <p>The mean alone is a misleading thing to plot against a real season. A real table is ONE draw;
+     * the mean of 200 draws is an expectation, and expectations are less extreme than realisations by
+     * construction. Carrying p10/p90 as well lets the figure show whether the real result falls inside
+     * the range of seasons the engine actually produces, which is the fairer question.
+     */
+    private static double[][] pointsDistribution(List<Xi> teams, int sims) {
         int n = teams.size();
         double[] total = new double[n];
+        int[][] all = new int[n][sims];
         MatchEngine engine = new MatchEngine();
         List<List<int[]>> schedule = SeasonSimulator.schedule(n % 2 == 0 ? n : n + 1);
 
@@ -200,10 +210,17 @@ public final class HistoricalValidation {
                     else if (sc[0] < sc[1]) pts[fx[1]] += 3;
                     else { pts[fx[0]]++; pts[fx[1]]++; }
                 }
-            for (int i = 0; i < n; i++) total[i] += pts[i];
+            for (int i = 0; i < n; i++) { total[i] += pts[i]; all[i][s] = pts[i]; }
         }
-        for (int i = 0; i < n; i++) total[i] /= sims;
-        return total;
+        double[] p10 = new double[n], p90 = new double[n];
+        for (int i = 0; i < n; i++) {
+            total[i] /= sims;
+            int[] sorted = all[i].clone();
+            java.util.Arrays.sort(sorted);
+            p10[i] = sorted[(int) (0.10 * (sims - 1))];
+            p90[i] = sorted[(int) (0.90 * (sims - 1))];
+        }
+        return new double[][]{total, p10, p90};
     }
 
     private static double pearson(double[] x, double[] y) {

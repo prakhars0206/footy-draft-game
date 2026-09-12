@@ -407,13 +407,35 @@ Every check so far is indirect. The Demo sweep confirms the curve is monotonic a
 
 ![Simulated versus real points](docs/images/validation.png)
 
-### The compression, and why it isn't a bug
+### How the experiment is set up
 
-Champions are systematically under-predicted — Juventus's 102 simulates at 70, Derby's 11 at 37.
+Worth being precise, because the setup determines how the figure should be read.
 
-This is arithmetic, not error. A predictor explaining R² of the variance produces predictions with **√R² of the spread**, always. At R² = 0.63 that's 0.79× — close to what's observed. The simulation predicts the *conditional mean*: what a squad of this quality typically achieves. Record-breaking seasons are record-breaking precisely because something happened that squad ratings cannot see.
+For each of the seven targets, `HistoricalValidation` looks up that exact league-season in the player data, fields each club's `optimalXi()`, and simulates **that** twenty-team league 200 times. Real points come from `joined.csv`, which is the actual final table built from football-data results. So both sides describe the same twenty clubs in the same season — Juventus's 102 is their real Serie A 2013/14 total, and the simulated figure comes from a league containing the same nineteen opponents they actually faced.
 
-Closing that gap needs better features, not different constants.
+Two different quantities come out of those 200 runs, and they answer different questions:
+
+| Quantity | What it answers |
+|---|---|
+| **mean points** | what this squad typically achieves — used for MAE and correlation |
+| **p10–p90 range** | what seasons the engine actually produces — used for coverage |
+
+### The compression, and how to read it correctly
+
+Plotted as means, champions look systematically under-predicted: Juventus's 102 against a simulated 70, Derby's 11 against 37.
+
+**Most of that is an artifact of comparing an average to a single draw.** The real table is one realisation, including whatever luck that season contained; the mean of 200 simulations is an expectation. An expectation is less extreme than a draw by construction, so plotting one against the other manufactures apparent under-prediction even for a perfect model.
+
+The coverage figure is the fair test: **93% of real results fall inside the simulated p10–p90 range**, record seasons included. The engine does produce 90-point champions — it just doesn't *average* to them, and neither does real football.
+
+Two genuine effects remain once that's accounted for:
+
+- **The conditional means are compressed.** A predictor explaining R² of the variance produces predictions with √R² of the spread, always. At R² = 0.63 that's 0.79×.
+- **The ranges are slightly too wide.** 93% coverage against an ideal 80% means the per-team spread is over-dispersed.
+
+These point in opposite directions and largely cancel in the league table, which is why the table *shape* matches (spread sd 17.1 against a real 16.9) while both components are individually off. Stated plainly: **the engine is a little under-confident about which team is better, and a little over-random within a season.**
+
+That cancellation is a consequence of how `FORM_SIGMA` was calibrated — tuned so total table spread matches reality, which necessarily inflates the noise term to compensate for a compressed systematic term. Fixing it properly means raising R² with better features, not retuning.
 
 ### Calibrating FORM_SIGMA empirically
 
@@ -618,6 +640,8 @@ Stated plainly, because most of them are informative.
 **Era normalisation is coupled to the calibration.** Change `wideTaperOffset` and the constants must be refitted.
 
 **Opponents ignore the run's era and scope filters** ([§10](#known-quirk)).
+
+**FIFA 07–10 players have only one position each** — a scraping gap, not a fact about football. It makes ~20% of the pool harder to field and, in four of seven formations, undraftable. Written up with candidate fixes in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 **Runs are in-memory** and vanish on restart.
 

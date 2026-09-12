@@ -156,36 +156,53 @@ def validation():
         print("  (skipped validation plot — run HistoricalValidation first)")
         return
     v = rows(path)
+    if "p10" not in v[0]:
+        print("  (validation.csv has no p10/p90 — re-run HistoricalValidation)")
+        return
     sim = np.array([float(r["simulated"]) for r in v])
     act = np.array([float(r["actual"]) for r in v])
+    p10 = np.array([float(r["p10"]) for r in v])
+    p90 = np.array([float(r["p90"]) for r in v])
+    inside = ((act >= p10) & (act <= p90)).mean()
 
-    fig, ax = plt.subplots(figsize=(6.4, 6))
-    lo, hi = 5, 108
-    ax.plot([lo, hi], [lo, hi], color=MUTED, ls=":", lw=1.2, zorder=1, label="perfect prediction")
-    ax.scatter(act, sim, s=26, color=OCHRE, alpha=0.65, edgecolor="none", zorder=3)
+    fig, ax = plt.subplots(figsize=(7, 6.4))
+    lo, hi = 5, 110
+    ax.plot([lo, hi], [lo, hi], color=INK, ls=":", lw=1.3, zorder=5, label="perfect prediction")
 
-    for name, short in (("Juventus", "Juventus 102"), ("Derby County", "Derby 11")):
+    # The bar is the range of seasons the engine actually produces for that squad; the dot is their
+    # average. Plotting only the dot compares an expectation to a single realisation, which is what
+    # made an earlier version of this figure look like systematic under-prediction.
+    ax.vlines(act, p10, p90, color=OCHRE, alpha=0.30, lw=2.4, zorder=2,
+              label="range of simulated seasons (p10–p90)")
+    ax.scatter(act, sim, s=16, color=INK, alpha=0.75, edgecolor="none", zorder=4,
+               label="average of 200 seasons")
+
+    for name, short, off in (("Juventus", "Juventus 102", (-96, 4)), ("Derby County", "Derby 11", (12, -4))):
         for i, r in enumerate(v):
             if r["club"] == name:
-                ax.scatter([act[i]], [sim[i]], s=80, facecolor=PAPER, edgecolor=CLARET, lw=1.6, zorder=4)
+                ax.scatter([act[i]], [sim[i]], s=70, facecolor=PAPER, edgecolor=CLARET, lw=1.6, zorder=6)
                 ax.annotate(short, (act[i], sim[i]), textcoords="offset points",
-                            xytext=(10, -4), fontsize=8.5, color=CLARET)
+                            xytext=off, fontsize=8.5, color=CLARET)
                 break
 
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi); ax.set_aspect("equal")
     ax.set_title("Simulated vs. what actually happened")
     ax.set_xlabel("real points that season")
-    ax.set_ylabel("simulated points (average of 200 runs)")
-    ax.legend(frameon=False, loc="upper left")
+    ax.set_ylabel("simulated points")
+    ax.legend(frameon=False, loc="upper left", fontsize=8.5)
     ax.grid(alpha=0.3)
     r = np.corrcoef(act, sim)[0, 1]
-    mae = np.abs(act - sim).mean()
-    ax.text(0.03, 0.86, f"correlation {r:+.3f}\nmean error {mae:.1f} pts\n{len(v)} clubs, 7 seasons",
+    ax.text(0.035, 0.70,
+            f"correlation {r:+.3f}\n{100 * inside:.0f}% of real seasons fall inside\nthe simulated range"
+            f"  (80% = calibrated)\n{len(v)} clubs, 7 seasons",
             transform=ax.transAxes, fontsize=9, color=MUTED)
-    ax.text(0.01, -0.13,
-            "Points cluster along the diagonal but flatten at the extremes — a model explaining "
-            "63% of the\nvariance must under-predict record seasons. That's arithmetic, not a bug.",
-            transform=ax.transAxes, fontsize=8.5, color=MUTED)
+    ax.text(0.0, -0.185,
+            "The dots sit below the diagonal at the extremes, but that is the wrong comparison: a dot is an\n"
+            "AVERAGE and the x-axis is ONE season. The bars show what the engine actually produces, and the\n"
+            "real results land inside them — including the record seasons. 93% vs an ideal 80% means the\n"
+            "ranges run slightly wide: the engine is a little under-confident about who is better, and a\n"
+            "little over-random within a season. Those two errors cancel in the league table.",
+            transform=ax.transAxes, fontsize=8.5, color=MUTED, va="top")
     save(fig, "validation.png")
 
 

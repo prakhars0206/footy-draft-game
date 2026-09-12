@@ -20,7 +20,7 @@ Spring Boot + a dependency-free Java engine, a React frontend, and an offline Py
 | [Running the analysis yourself](#running-the-analysis-yourself) | the Python pipeline |
 | [Status](#status) | what works, what's next |
 
-For the full detail — every model, every formula, every decision and why — see **[TECHNICAL.md](TECHNICAL.md)**.
+For the full detail — every model, every formula, every decision and why — see **[TECHNICAL.md](TECHNICAL.md)**. Open defects are tracked in **[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)**.
 
 ---
 
@@ -135,13 +135,19 @@ The one that barely moved is a small vindication of the original guesswork; the 
 
 ### Step 5 — does it actually work?
 
-The honest test is not "does the simulation look plausible" but "does it reproduce seasons that really happened". Feed the engine the twenty real clubs of a real season and compare.
+The honest test is not "does the simulation look plausible" but "does it reproduce seasons that really happened".
+
+So: take a real league-season — say Serie A 2013/14 — find those exact twenty clubs in the player data, field each one's best XI, and simulate that league 200 times. Then compare to the table that actually happened. Seven league-seasons, 138 clubs.
 
 ![Simulated points against real points for 138 clubs](docs/images/validation.png)
 
-Across 7 league-seasons and 138 clubs: **correlation +0.79**, and draw rate and goals-per-game land within a whisker of reality (24% vs 25.5%, 2.69 vs 2.72 goals).
+**Correlation +0.79**, and match-level behaviour lands within a whisker of reality: 24% draws against a real 25.5%, 2.69 goals per game against 2.72.
 
-The flattening at the edges is worth understanding rather than hiding. Juventus's record 102-point season simulates at 70. That's not a bug — it's unavoidable. The model explains 63% of the variation in team strength, and a model that explains 63% of the variance produces predictions with √0.63 ≈ 79% of the spread. Record-breaking seasons are *record-breaking* precisely because something happened that squad ratings can't see. Fixing it needs better information about teams, not different constants.
+**The dots sit below the diagonal at the extremes, and that needs care, because it's easy to misread.** Juventus's record 102-point season shows a dot at 70 — but that dot is the *average of 200 simulated seasons*, while the x-axis is *one* real season. Those aren't comparable quantities. An average is always less extreme than a single draw, so comparing them manufactures the appearance of under-prediction.
+
+The bars are the honest comparison: the range of seasons the engine actually produces for that squad. **93% of real results fall inside them**, including the record ones. If you play the game you'll see 85- and 90-point champions regularly — the engine produces those seasons, it just doesn't *average* to them.
+
+Two real effects remain underneath. The model explains 63% of the variation in team strength, so its *averages* genuinely are compressed by about √0.63. And 93% coverage against an ideal 80% means the ranges run slightly wide. Those two errors point in opposite directions and largely cancel in the league table — the engine is a little under-confident about which team is better, and a little over-random within a season. Fixing either needs better information about teams, not different constants.
 
 **Two things this bought beyond accuracy.** It found a real flaw in the original model — attack and defence turn out to respond to squad quality at genuinely different rates, which a single shared constant cannot express. And it forced a separation that should probably exist in any simulation game: measured values live in one file that is never hand-edited, and deliberate design choices live in another. When the game runs calmer than real football, that's now a documented decision with a number attached, rather than a quietly falsified measurement.
 
