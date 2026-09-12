@@ -6,6 +6,8 @@ A football draft-and-simulation game built from scratch — every player who app
 
 Spring Boot + a dependency-free Java engine, a React frontend, and an offline Python pipeline that does the statistics.
 
+> Just want to run it? `mvn spring-boot:run`, then `cd frontend && npm run dev`. Full setup in [Quick start](#quick-start).
+
 ---
 
 ## Contents
@@ -13,9 +15,9 @@ Spring Boot + a dependency-free Java engine, a React frontend, and an offline Py
 | | |
 |---|---|
 | [What you actually do](#what-you-actually-do) | the game loop |
-| [Quick start](#quick-start) | get it running |
-| [The interesting part: making it real](#the-interesting-part-making-it-real) | how the engine got calibrated |
+| [The interesting part: fitting it to real football](#the-interesting-part-fitting-it-to-real-football) | where the engine's numbers came from |
 | [How it fits together](#how-it-fits-together) | architecture |
+| [Quick start](#quick-start) | get it running |
 | [Project layout](#project-layout) | where things live |
 | [Running the analysis yourself](#running-the-analysis-yourself) | the Python pipeline |
 | [Status](#status) | what works, what's next |
@@ -56,40 +58,8 @@ A few things that make it more than a random-number generator:
 
 ---
 
-## Quick start
 
-You need **Java 17+** and **Maven**. The player data (`*.csv`) is git-ignored — the app boots fine without it, just with an empty pool, so drop your FIFA exports into `data/` first.
-
-```bash
-mvn spring-boot:run          # API on http://localhost:8080
-```
-
-Then in another terminal:
-
-```bash
-# a whole season, no draft required
-curl "localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42"
-
-# or play a full run end-to-end and check every step
-python3 scripts/smoke_test.py
-```
-
-For the actual game, run the frontend too:
-
-```bash
-cd frontend && npm install && npm run dev     # http://localhost:5173
-```
-
-There's also a no-Maven path for the engine alone, which is handy when you only want to watch the simulation work:
-
-```bash
-javac -d out src/main/java/com/draft/footy/*.java
-java -cp out com.draft.footy.Demo
-```
-
----
-
-## The interesting part: making it real
+## The interesting part: fitting it to real football
 
 A match simulator needs to answer one question: **given these two teams, how many goals?** Everything else is bookkeeping.
 
@@ -143,15 +113,11 @@ So: take a real league-season — say Serie A 2013/14 — find those exact twent
 
 **Correlation +0.79**, and match-level behaviour lands within a whisker of reality: 24.5% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 84–91 points against a real 81–102.
 
-**The dots sit below the diagonal at the extremes, and that needs care, because it's easy to misread.** Juventus's record 102-point season shows a dot at 70 — but that dot is the *average of 200 simulated seasons*, while the x-axis is *one* real season. Those aren't comparable quantities. An average is always less extreme than a single draw, so comparing them manufactures the appearance of under-prediction.
+**The dots sit below the diagonal at the extremes, and that's easy to misread.** Juventus's record 102-point season shows a dot at 75 — but that dot is the *average of 200 simulated seasons*, while the x-axis is *one* real season. An average is always less extreme than a single draw, so comparing them manufactures the appearance of under-prediction.
 
-The bars are the honest comparison: the range of seasons the engine actually produces for that squad. **93% of real results fall inside them**, including the record ones. If you play the game you'll see 85- and 90-point champions regularly — the engine produces those seasons, it just doesn't *average* to them.
+The bars are the fair comparison: the range of seasons the engine actually produces. **88% of real results land inside them.** Play the game and you'll see 85- and 90-point champions regularly — the engine produces those seasons, it just doesn't *average* to them.
 
-One real effect remains underneath: the model explains 63% of the variation in team strength, so its *averages* are genuinely compressed by about √0.63.
-
-That used to be worse. Because a regression predicts conditional *means*, its output carries only √R² of the real spread — which made every team look more alike than real teams are, and had to be hidden by cranking up the season-randomness. The result was an engine that was simultaneously under-confident about who was better and over-random within a season: two errors that cancelled in the league table while both being wrong, and which showed up in play as teams swinging further from expectation than felt right.
-
-Multiplying the scales by √R² restores the lost spread, and the randomness can then come back down. It improved everything at once — per-team spread 14.7 → 11.4, prediction error 11.1 → 10.3, league shape still exact. The one cost is that huge over-achievements get about three times rarer: Leicester 2015/16 is still reachable, roughly one such season every three or four league-years, but no longer routine. [TECHNICAL.md](TECHNICAL.md) has the workings.
+What remains underneath is a real limit: squad ratings explain 63% of the variation in team strength, so the model's averages stay somewhat compressed no matter what. Getting that far took one non-obvious correction — a regression predicts *means*, which carry only √R² of the real spread, and left uncorrected that made every team look more alike than real teams are. [TECHNICAL.md](TECHNICAL.md) has the workings and the numbers.
 
 **Two things this bought beyond accuracy.** It found a real flaw in the original model — attack and defence turn out to respond to squad quality at genuinely different rates, which a single shared constant cannot express. And it forced a separation that should probably exist in any simulation game: measured values live in one file that is never hand-edited, and deliberate design choices live in another. When the game runs calmer than real football, that's now a documented decision with a number attached, rather than a quietly falsified measurement.
 
@@ -205,6 +171,41 @@ The engine deliberately has **no Spring imports**. It's plain Java that can be c
 
 ---
 
+## Quick start
+
+You need **Java 17+** and **Maven**. The player data (`*.csv`) is git-ignored — the app boots fine without it, just with an empty pool, so drop your FIFA exports into `data/` first.
+
+```bash
+mvn spring-boot:run          # API on http://localhost:8080
+```
+
+Then in another terminal:
+
+```bash
+# a whole season, no draft required
+curl "localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42"
+
+# or play a full run end-to-end and check every step
+python3 scripts/smoke_test.py
+```
+
+For the actual game, run the frontend too:
+
+```bash
+cd frontend && npm install && npm run dev     # http://localhost:5173
+```
+
+There's also a no-Maven path for the engine alone, which is handy when you only want to watch the simulation work:
+
+```bash
+javac -d out src/main/java/com/draft/footy/*.java
+java -cp out com.draft.footy.Demo
+```
+
+---
+
+---
+
 ## Project layout
 
 ```
@@ -255,7 +256,14 @@ Each script explains itself if you read the top of the file, and prints its own 
 
 ## Status
 
-**Working end to end.** Draft, simulate, watch it play out, read the debrief. Browse the Almanac. The engine runs on fitted constants and is validated against real league tables.
+**Working end to end.** Draft, simulate, watch it play out, read the debrief. Browse the Almanac.
+
+| | |
+|---|---|
+| Player pool | 1,952 club-seasons · 20 editions · ~58k player-seasons |
+| Calibrated on | 36,197 real matches, 100 league-seasons |
+| Validated against | 7 real league-seasons, 138 clubs — correlation +0.79 |
+| Tests | 35 passing, plus an end-to-end smoke test against a live server |
 
 **Next up:**
 
