@@ -165,44 +165,73 @@ def validation():
     p90 = np.array([float(r["p90"]) for r in v])
     inside = ((act >= p10) & (act <= p90)).mean()
 
-    fig, ax = plt.subplots(figsize=(7, 6.4))
+    # A handful of club-seasons picked to span the range and tell the story: two record highs, the
+    # famous over-achievement, a dominant champion, and the record low.
+    HIGHLIGHT = [
+        ("Juventus",         "2013/14", "Juventus 2013/14",         "#96382f", "102 pts — Serie A record"),
+        ("Manchester City",  "2017/18", "Man City 2017/18",         "#b07d22", "100 pts — Premier League record"),
+        ("Leicester City",   "2015/16", "Leicester City 2015/16",   "#4a7359", "81 pts — the 5000-1 title"),
+        ("FC Bayern München", "2012/13", "Bayern München 2012/13",  "#5b7fa8", "91 pts — treble winners"),
+        ("Derby County",     "2007/08", "Derby County 2007/08",     "#6b4a6e", "11 pts — worst PL season"),
+    ]
+
+    fig, ax = plt.subplots(figsize=(11.5, 7.2))
     lo, hi = 5, 110
     ax.plot([lo, hi], [lo, hi], color=INK, ls=":", lw=1.3, zorder=5, label="perfect prediction")
 
     # The bar is the range of seasons the engine actually produces for that squad; the dot is their
     # average. Plotting only the dot compares an expectation to a single realisation, which is what
     # made an earlier version of this figure look like systematic under-prediction.
-    ax.vlines(act, p10, p90, color=OCHRE, alpha=0.30, lw=2.4, zorder=2,
+    ax.vlines(act, p10, p90, color=OCHRE, alpha=0.22, lw=2.6, zorder=2,
               label="range of simulated seasons (p10–p90)")
-    ax.scatter(act, sim, s=16, color=INK, alpha=0.75, edgecolor="none", zorder=4,
+    ax.scatter(act, sim, s=15, color=INK, alpha=0.55, edgecolor="none", zorder=4,
                label="average of 200 seasons")
 
-    for name, short, off in (("Juventus", "Juventus 102", (-96, 4)), ("Derby County", "Derby 11", (12, -4))):
+    handles = []
+    for club, season, label, colour, note in HIGHLIGHT:
         for i, r in enumerate(v):
-            if r["club"] == name:
-                ax.scatter([act[i]], [sim[i]], s=70, facecolor=PAPER, edgecolor=CLARET, lw=1.6, zorder=6)
-                ax.annotate(short, (act[i], sim[i]), textcoords="offset points",
-                            xytext=off, fontsize=8.5, color=CLARET)
+            if r["club"] == club and r["season"] == season:
+                ax.vlines(act[i], p10[i], p90[i], color=colour, alpha=0.75, lw=3.2, zorder=6)
+                ax.scatter([act[i]], [sim[i]], s=95, facecolor=colour, edgecolor=PAPER, lw=1.6, zorder=8)
+                handles.append(plt.Line2D([], [], marker="o", ls="", markersize=8.5,
+                                          markerfacecolor=colour, markeredgecolor=PAPER,
+                                          label=f"{label}  ·  {note}"))
                 break
 
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi); ax.set_aspect("equal")
-    ax.set_title("Simulated vs. what actually happened")
+    ax.set_title("Simulated vs. what actually happened", pad=12)
     ax.set_xlabel("real points that season")
     ax.set_ylabel("simulated points")
-    ax.legend(frameon=False, loc="upper left", fontsize=8.5)
     ax.grid(alpha=0.3)
+
+    first = ax.legend(frameon=False, loc="upper left", fontsize=9)
+    ax.add_artist(first)
+    key = ax.legend(handles=handles, frameon=True, loc="upper left", bbox_to_anchor=(1.02, 1.0),
+                    fontsize=8.8, title="highlighted club-seasons", title_fontsize=9,
+                    labelspacing=0.85, borderpad=0.9)
+    key.get_frame().set_facecolor(PAPER)
+    key.get_frame().set_edgecolor(RULE)
+    key.get_title().set_color(INK)
+
     r = np.corrcoef(act, sim)[0, 1]
-    ax.text(0.035, 0.70,
-            f"correlation {r:+.3f}\n{100 * inside:.0f}% of real seasons fall inside\nthe simulated range"
-            f"  (80% = calibrated)\n{len(v)} clubs, 7 seasons",
-            transform=ax.transAxes, fontsize=9, color=MUTED)
-    ax.text(0.0, -0.185,
-            "The dots sit below the diagonal at the extremes, but that is the wrong comparison: a dot is an\n"
-            "AVERAGE and the x-axis is ONE season. The bars show what the engine actually produces, and the\n"
-            "real results land inside them — including the record seasons. 93% vs an ideal 80% means the\n"
-            "ranges run slightly wide: the engine is a little under-confident about who is better, and a\n"
-            "little over-random within a season. Those two errors cancel in the league table.",
-            transform=ax.transAxes, fontsize=8.5, color=MUTED, va="top")
+    ax.text(1.02, 0.52,
+            f"correlation  {r:+.3f}\n"
+            f"{100 * inside:.0f}% of real seasons fall inside\n"
+            f"the simulated range   (80% = calibrated)\n"
+            f"{len(v)} clubs across 7 league-seasons",
+            transform=ax.transAxes, fontsize=9, color=MUTED, va="top")
+    ax.text(1.02, 0.36,
+            "A dot is an AVERAGE of 200 seasons;\n"
+            "the x-axis is ONE real season. Those are\n"
+            "different quantities, so the dots flatten\n"
+            "at the extremes no matter how good the\n"
+            "model is. The bars are the fair test — and\n"
+            "the real results land inside them.\n\n"
+            "93% against an ideal 80% means the bars\n"
+            "run slightly wide: the engine is a little\n"
+            "under-confident about who is better, and\n"
+            "a little over-random within a season.",
+            transform=ax.transAxes, fontsize=8.6, color=MUTED, va="top")
     save(fig, "validation.png")
 
 

@@ -318,14 +318,29 @@ Two safeguards:
 
 ## 6. What the calibration found
 
-| Constant | Hand-tuned | Fitted | What changed |
-|---|---|---|---|
-| `BASE_GOALS` | 1.15 | **1.1007** | barely — the guess was good |
-| `SCALE` (attack) | 16.5 | **20.05** | gaps matter less than assumed |
-| `SCALE` (defence) | 16.5 | **26.60** | *was the same number* |
-| `HOME_ADV` | 3.95 pts | **0.2579 log-goals** | also changed shape, see below |
-| `RHO` | −0.11 | **−0.0662** | fewer draws than assumed |
-| `FORM_SIGMA` | 0.78 | **3.52** | far more real-world variation |
+### Every constant, before and after
+
+| Constant | What it controls | Was | Now | Source |
+|---|---|---|---|---|
+| `BASE_GOALS` | goal volume — expected goals for an average side vs an average side | 1.15 | **1.1007** | fitted |
+| `SCALE_ATTACK` | rating points per log-goal, attacking. **Larger = squad quality matters less** | 16.5 *(shared)* | **20.054** | fitted |
+| `SCALE_DEFENCE` | the same, defending | 16.5 *(shared)* | **26.599** | fitted |
+| `ATTACK_REF` | the `attackRating` the constants are centred on | — | **78.441** | pool mean |
+| `DEFENCE_REF` | the `defenceRating` they're centred on | — | **77.957** | pool mean |
+| `HOME_ADV` | home advantage. Was rating points applied ±symmetrically; now **log-goals on the home rate only** | 3.95 pts | **0.2579** (×1.29) | fitted |
+| `RHO` | Dixon-Coles low-score correction — the draw-rate lever. More negative = more 0-0 and 1-1 | −0.11 | **−0.0662** | fitted |
+| `FORM_SIGMA` | season-to-season swing. How far a team drifts from its expected level over a campaign | 0.78 | **3.5201** | fitted |
+| `FORM_SIGMA_MULTIPLIER` | how much of that swing the game applies | — | **1.40** | empirical |
+| `MAX_LAMBDA` | ceiling on one side's expected goals — a safety clamp for mismatches the draft can create but a real league never sees | 2.5 | **2.5** | unchanged, chosen |
+| `Xi` line weights | which lines feed attack and defence | 0.65/0.35, 0.55/0.25/0.20 | **unchanged** | not learnable, see below |
+| `POTS_TEAM_WEIGHT` | how much team success skews Player of the Season | 0.63 | **0.63** | unchanged, flavour |
+| `Projection` curve | the stateless-demo points estimate | 3.1·ovr − 189 | **2.35·ovr − 130** | refit to the new engine |
+
+Three of those are worth reading twice:
+
+- **`SCALE` split in two**, because attack and defence turn out to respond to squad quality at different rates.
+- **`HOME_ADV` changed shape as well as value.** It used to be a symmetric bonus to the home side and penalty to the away side, which no fit supports. Dixon-Coles multiplies the home rate only, and that's how the constant was estimated.
+- **`FORM_SIGMA` looks like a 4.5× increase but isn't comparable**, because the old value was tuned against a different `SCALE`. What matters is the effective spread it produces, which is covered below.
 
 Fit quality: Spearman correlation between fitted strength and actual league points averages **0.944** across the 100 league-seasons.
 
@@ -435,7 +450,39 @@ Two genuine effects remain once that's accounted for:
 
 These point in opposite directions and largely cancel in the league table, which is why the table *shape* matches (spread sd 17.1 against a real 16.9) while both components are individually off. Stated plainly: **the engine is a little under-confident about which team is better, and a little over-random within a season.**
 
-That cancellation is a consequence of how `FORM_SIGMA` was calibrated — tuned so total table spread matches reality, which necessarily inflates the noise term to compensate for a compressed systematic term. Fixing it properly means raising R² with better features, not retuning.
+That cancellation is a consequence of how `FORM_SIGMA` was calibrated — tuned so total table spread matches reality, which necessarily inflates the noise term to compensate for a compressed systematic term.
+
+### How over-dispersed, exactly
+
+Worth quantifying, because it's visible in play as teams swinging further from their expected finish than feels right.
+
+| | |
+|---|---|
+| Simulated per-team spread | **14.69 pts** (p10–p90 width 37.7) |
+| Actual deviation of real results from our prediction | **11.21 pts** |
+
+The second figure contains *both* model error and real season-to-season noise. Our noise alone is already **1.31× that total**, so genuine season noise must be considerably smaller. The per-team distribution is too wide, even though the league table's overall spread is right.
+
+### The de-shrinkage option
+
+There's a principled fix that isn't just turning `FORM_SIGMA` down, and it's worth recording because it reframes what the constants are for.
+
+A regression predicts the **conditional mean**, so its predictions have √R² of the true spread — that's the compression. But the game doesn't need to *predict a specific team*; it needs to *generate a league that looks like a real league*. Those are different objectives, and the second one wants the predictions de-shrunk back to full spread:
+
+```
+SCALE' = SCALE × √R²
+```
+
+| | fitted | × √R² | old hand-tuned |
+|---|---|---|---|
+| attack | 20.054 | **15.91** | 16.5 |
+| defence | 26.599 | **17.62** | 16.5 |
+
+Both land either side of **16.5** — the value originally arrived at by hand. That's suggestive rather than proof, but it makes sense: the hand-tuning was done by looking at whether the *league* came out right, which is the generative objective, not the predictive one.
+
+With de-shrunk scales the systematic spread is correct on its own, so `FORM_SIGMA` no longer has to be inflated to compensate, and both components would be individually right instead of wrong in cancelling directions.
+
+The cost is that predictive accuracy against real teams gets *worse* — MAE would rise — because de-shrinking deliberately over-commits. For a forecasting tool that would be a bug. For a game it's arguably the correct trade. Untested so far.
 
 ### Calibrating FORM_SIGMA empirically
 
