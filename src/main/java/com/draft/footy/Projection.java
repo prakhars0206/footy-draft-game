@@ -7,9 +7,9 @@ public final class Projection {
 
     /**
      * Expected points from overall — least-squares fit to what teams actually achieve in the sim against the
-     * opponent pyramid (75->~45, 80->~58, 86->~72, 90->~81). Refit after the Dixon-Coles calibration landed;
-     * the curve is flatter than before because the fitted scales say strength gaps matter less than the old
-     * hand-tuned SCALE=16.5 assumed.
+     * opponent pyramid (75->~43, 80->~61, 86->~80, 90->~88). Refit after de-shrinking the fitted scales
+     * (see {@link GameBalance#SCALE_DESHRINK}), which restored the spread a conditional-mean regression
+     * necessarily loses and made the curve steeper again.
      *
      * <p><b>Demo path only.</b> {@code MonteCarlo} drives every live projection by simulating the user's exact
      * season, so it tracks the engine automatically and needs no refit. This curve survives as the stateless
@@ -17,7 +17,7 @@ public final class Projection {
      * constants move again.
      */
     public static int expectedPoints(int overall) {
-        double pts = 2.35 * overall - 130.0;
+        double pts = 2.95 * overall - 176.0;
         return (int) Math.round(Math.max(14, Math.min(100, pts)));
     }
 
@@ -27,11 +27,11 @@ public final class Projection {
         // because that league is deliberately harsher than any real division.
         return new Odds(
             xp,
-            band(xp, 80, 6),    // win league
-            band(xp, 65, 7),    // top 4
-            band(xp, 58, 8),    // top 6
-            band(xp, 47, 9),    // top 10
-            1 - band(xp, 34, 5) // relegation = below the survival line
+            band(xp, 88, 6),    // win league
+            band(xp, 70, 7),    // top 4
+            band(xp, 62, 8),    // top 6
+            band(xp, 50, 9),    // top 10
+            1 - band(xp, 32, 5) // relegation = below the survival line
         );
     }
 

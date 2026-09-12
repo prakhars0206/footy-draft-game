@@ -39,6 +39,22 @@ public final class GameBalance {
      */
     public static final double MAX_LAMBDA;
 
+    /**
+     * How far to "de-shrink" the fitted scales, from 0 (use them as measured) to 1 (full correction).
+     *
+     * <p>The bridge regression predicts a CONDITIONAL MEAN, and a predictor explaining R² of the
+     * variance necessarily produces predictions with only √R² of the true spread. That is correct for
+     * forecasting a specific team and wrong for generating a league: it makes every side look more
+     * alike than real sides are, which then has to be papered over by inflating FORM_SIGMA — leaving
+     * the engine under-confident about who is better and over-random within a season.
+     *
+     * <p>Dividing the rating difference by a smaller scale restores the lost spread:
+     * {@code SCALE' = SCALE × √R²}. Predictive accuracy against real teams gets slightly worse,
+     * because this deliberately over-commits. For a forecaster that is a bug; for a game it is the
+     * right trade, because what matters is that the league looks like a league.
+     */
+    public static final double SCALE_DESHRINK;
+
     static {
         Properties p = new Properties();
         try (InputStream in = GameBalance.class.getResourceAsStream("/game-balance.properties")) {
@@ -48,6 +64,23 @@ public final class GameBalance {
         }
         FORM_SIGMA_MULTIPLIER = dbl(p, "form.sigma.multiplier", 1.0);
         MAX_LAMBDA            = dbl(p, "max.lambda", 2.5);
+        SCALE_DESHRINK        = dbl(p, "scale.deshrink", 0.0);
+    }
+
+    /** The attack scale the engine actually uses: measured, then de-shrunk by {@link #SCALE_DESHRINK}. */
+    public static double scaleAttack() {
+        return Calibration.SCALE_ATTACK * deshrinkFactor(Calibration.R2_ATTACK);
+    }
+
+    /** The defence scale the engine actually uses. */
+    public static double scaleDefence() {
+        return Calibration.SCALE_DEFENCE * deshrinkFactor(Calibration.R2_DEFENCE);
+    }
+
+    /** Interpolates between 1 (measured) and √R² (fully de-shrunk). */
+    private static double deshrinkFactor(double r2) {
+        if (SCALE_DESHRINK <= 0) return 1.0;
+        return 1.0 + SCALE_DESHRINK * (Math.sqrt(Math.max(r2, 1e-6)) - 1.0);
     }
 
     /** The form spread the simulation actually uses: measured reality, scaled by the playability knob. */

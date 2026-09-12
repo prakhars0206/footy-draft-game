@@ -50,6 +50,8 @@ public final class Calibration {
     public static final double HOME_ADV_LOG;   // home advantage, in LOG-GOALS, applied to the home rate only
     public static final double RHO;            // Dixon-Coles low-score correction
     public static final double FORM_SIGMA;     // measured season-to-season form spread, in rating points
+    public static final double R2_ATTACK;      // how much of attack strength squad rating explains
+    public static final double R2_DEFENCE;     // ditto for defence
 
     /** True when the fitted file was found; false means the hand-tuned fallbacks are in use. */
     public static final boolean FITTED;
@@ -81,6 +83,8 @@ public final class Calibration {
         HOME_ADV_LOG  = dbl(p, "home.adv.loggoals", 3.95 / 16.5);
         RHO           = dbl(p, "rho", -0.11);
         FORM_SIGMA    = dbl(p, "form.sigma", 0.78);
+        R2_ATTACK     = dbl(p, "bridge.r2.attack", 1.0);
+        R2_DEFENCE    = dbl(p, "bridge.r2.defence", 1.0);
         SOURCE = loaded
             ? p.getProperty("fitted.matches", "?") + " matches, fitted " + p.getProperty("fitted.at", "?")
             : "hand-tuned fallback (calibration.properties not on the classpath)";

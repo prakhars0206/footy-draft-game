@@ -102,7 +102,7 @@ class EngineTest {
     void eliteTeamLandsNearProjection() throws Exception {
         var clubs = clubs(); var pool = pool(clubs);
         double avg = avgPoints(clubs, pool, 90, 120);
-        assertTrue(avg > 76 && avg < 88, "90-rated avg points should sit near the pyramid's title mark, was " + avg);
+        assertTrue(avg > 81 && avg < 96, "90-rated avg points should sit near the pyramid's title mark, was " + avg);
     }
 
     /** The fitted constants loaded, and the model form the engine implements matches what they were fit for. */
@@ -113,6 +113,10 @@ class EngineTest {
         assertEquals("split-scale-v2", Calibration.MODEL_FORM);
         assertTrue(Calibration.SCALE_ATTACK < Calibration.SCALE_DEFENCE,
             "attack should be the more rating-sensitive side (fitted ~20.1 vs ~26.6)");
+        assertTrue(GameBalance.scaleAttack() <= Calibration.SCALE_ATTACK,
+            "de-shrinking may only tighten the scale, never loosen it");
+        assertTrue(GameBalance.scaleDefence() <= Calibration.SCALE_DEFENCE,
+            "de-shrinking may only tighten the scale, never loosen it");
         assertTrue(Calibration.HOME_ADV_LOG > 0.15 && Calibration.HOME_ADV_LOG < 0.40,
             "home advantage in log-goals, was " + Calibration.HOME_ADV_LOG);
     }

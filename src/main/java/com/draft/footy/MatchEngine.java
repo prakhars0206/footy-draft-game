@@ -51,8 +51,8 @@ public final class MatchEngine {
      * </ul>
      */
     static double lambda(double attack, double defence, boolean home) {
-        double logRate = (attack - Calibration.ATTACK_REF) / Calibration.SCALE_ATTACK
-                       - (defence - Calibration.DEFENCE_REF) / Calibration.SCALE_DEFENCE
+        double logRate = (attack - Calibration.ATTACK_REF) / GameBalance.scaleAttack()
+                       - (defence - Calibration.DEFENCE_REF) / GameBalance.scaleDefence()
                        + (home ? Calibration.HOME_ADV_LOG : 0.0);
         return Math.min(Calibration.BASE_GOALS * Math.exp(logRate), GameBalance.MAX_LAMBDA);
     }

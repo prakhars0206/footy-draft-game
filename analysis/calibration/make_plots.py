@@ -243,11 +243,21 @@ def constants():
             k, v = line.split("=", 1)
             props[k.strip()] = v.strip()
 
+    r2a, r2d = float(props["bridge.r2.attack"]), float(props["bridge.r2.defence"])
+    gb = {}
+    for line in (ROOT / "src/main/resources/game-balance.properties").read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1); gb[k.strip()] = v.strip()
+    ds = float(gb.get("scale.deshrink", 0))
+    mult = float(gb.get("form.sigma.multiplier", 1))
+    dfac = lambda r2: 1 + ds * (r2 ** 0.5 - 1)
+
+    # old hand-tuned -> what the engine ACTUALLY uses now (fitted, then de-shrunk where that applies)
     items = [
         ("BASE_GOALS", 1.15, float(props["base.goals"]), "goals for an average side"),
-        ("SCALE (attack)", 16.5, float(props["scale.attack"]), "rating points per log-goal"),
-        ("SCALE (defence)", 16.5, float(props["scale.defence"]), "— was one shared value"),
-        ("FORM_SIGMA", 0.78, float(props["form.sigma"]), "season-to-season swing"),
+        ("SCALE (attack)", 16.5, float(props["scale.attack"]) * dfac(r2a), "rating points per log-goal"),
+        ("SCALE (defence)", 16.5, float(props["scale.defence"]) * dfac(r2d), "— was one shared value"),
+        ("FORM_SIGMA", 0.78, float(props["form.sigma"]) * mult, "season-to-season swing"),
     ]
     fig, ax = plt.subplots(figsize=(7.6, 3.4))
     y = np.arange(len(items))[::-1]
@@ -261,10 +271,10 @@ def constants():
                     ha="center", fontsize=8.5, color=OCHRE, weight="bold")
     ax.set_yticks(y, [f"{n}\n{d}" for n, _, _, d in items], fontsize=9)
     ax.set_xlabel("value")
-    ax.set_title("Hand-tuned  →  measured")
+    ax.set_title("Hand-tuned  →  what the engine uses now")
     ax.grid(axis="x", alpha=0.3)
     ax.scatter([], [], s=70, color=MUTED, label="guessed by eye")
-    ax.scatter([], [], s=90, color=OCHRE, label="fitted to 36,197 matches")
+    ax.scatter([], [], s=90, color=OCHRE, label="derived from 36,197 matches")
     ax.legend(frameon=False, loc="lower right", fontsize=9)
     save(fig, "constants.png")
 

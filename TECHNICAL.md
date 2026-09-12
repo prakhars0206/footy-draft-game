@@ -330,7 +330,8 @@ Two safeguards:
 | `HOME_ADV` | home advantage. Was rating points applied ±symmetrically; now **log-goals on the home rate only** | 3.95 pts | **0.2579** (×1.29) | fitted |
 | `RHO` | Dixon-Coles low-score correction — the draw-rate lever. More negative = more 0-0 and 1-1 | −0.11 | **−0.0662** | fitted |
 | `FORM_SIGMA` | season-to-season swing. How far a team drifts from its expected level over a campaign | 0.78 | **3.5201** | fitted |
-| `FORM_SIGMA_MULTIPLIER` | how much of that swing the game applies | — | **1.40** | empirical |
+| `FORM_SIGMA_MULTIPLIER` | how much of that swing the game applies | — | **0.70** | empirical |
+| `SCALE_DESHRINK` | how far to restore the spread a conditional-mean fit loses | — | **1.0** (full) | generative choice |
 | `MAX_LAMBDA` | ceiling on one side's expected goals — a safety clamp for mismatches the draft can create but a real league never sees | 2.5 | **2.5** | unchanged, chosen |
 | `Xi` line weights | which lines feed attack and defence | 0.65/0.35, 0.55/0.25/0.20 | **unchanged** | not learnable, see below |
 | `POTS_TEAM_WEIGHT` | how much team success skews Player of the Season | 0.63 | **0.63** | unchanged, flavour |
@@ -452,51 +453,59 @@ These point in opposite directions and largely cancel in the league table, which
 
 That cancellation is a consequence of how `FORM_SIGMA` was calibrated — tuned so total table spread matches reality, which necessarily inflates the noise term to compensate for a compressed systematic term.
 
-### How over-dispersed, exactly
+### De-shrinking: fixing both errors instead of cancelling them
 
-Worth quantifying, because it's visible in play as teams swinging further from their expected finish than feels right.
+The cancellation above was unsatisfying, and it showed up in play as teams swinging further from their expected finish than felt right. It's measurable:
 
-| | |
+| | before |
 |---|---|
-| Simulated per-team spread | **14.69 pts** (p10–p90 width 37.7) |
-| Actual deviation of real results from our prediction | **11.21 pts** |
+| Simulated per-team spread | 14.69 pts |
+| Actual deviation of real results from prediction | 11.21 pts |
 
-The second figure contains *both* model error and real season-to-season noise. Our noise alone is already **1.31× that total**, so genuine season noise must be considerably smaller. The per-team distribution is too wide, even though the league table's overall spread is right.
+The second figure contains *both* model error and real season noise, so our noise alone being 1.31× the total meant the per-team distribution was clearly too wide.
 
-### The de-shrinkage option
+**The fix isn't to turn `FORM_SIGMA` down — it's to stop compressing the signal in the first place.**
 
-There's a principled fix that isn't just turning `FORM_SIGMA` down, and it's worth recording because it reframes what the constants are for.
-
-A regression predicts the **conditional mean**, so its predictions have √R² of the true spread — that's the compression. But the game doesn't need to *predict a specific team*; it needs to *generate a league that looks like a real league*. Those are different objectives, and the second one wants the predictions de-shrunk back to full spread:
-
-```
-SCALE' = SCALE × √R²
-```
+A regression predicts the conditional mean, so its predictions carry √R² of the true spread. That's correct for forecasting one team and wrong for generating a league. Multiplying the scale by √R² restores the lost spread (a smaller scale means rating differences matter more):
 
 | | fitted | × √R² | old hand-tuned |
 |---|---|---|---|
 | attack | 20.054 | **15.91** | 16.5 |
 | defence | 26.599 | **17.62** | 16.5 |
 
-Both land either side of **16.5** — the value originally arrived at by hand. That's suggestive rather than proof, but it makes sense: the hand-tuning was done by looking at whether the *league* came out right, which is the generative objective, not the predictive one.
+Both land either side of **16.5**, the value originally reached by hand — which makes sense, because hand-tuning was judged on whether the *league* looked right, the generative objective, not the predictive one.
 
-With de-shrunk scales the systematic spread is correct on its own, so `FORM_SIGMA` no longer has to be inflated to compensate, and both components would be individually right instead of wrong in cancelling directions.
+This lives in `GameBalance.SCALE_DESHRINK` (0 = as measured, 1 = full correction) rather than in the calibration file, because it's a deliberate choice about what the model is *for*, not a measurement.
 
-The cost is that predictive accuracy against real teams gets *worse* — MAE would rise — because de-shrinking deliberately over-commits. For a forecasting tool that would be a bug. For a game it's arguably the correct trade. Untested so far.
+### What it bought
 
-### Calibrating FORM_SIGMA empirically
+Expected a trade-off; got an improvement on every axis. Measured across the same 7 real league-seasons:
 
-The averaged comparison above deliberately cancels form out. A player experiences **one** season, and that one season should look like a real table — a champion near 90, a bottom club near 25. That's a different question, and it's what actually calibrates `FORM_SIGMA`.
-
-Simulating single seasons and comparing table shape:
-
-| multiplier | effective σ | simulated spread sd | real |
+| | deshrink 0 / mult 1.40 | **deshrink 1 / mult 0.70** | real |
 |---|---|---|---|
-| 1.0 | 3.52 | 15.3 | 16.9 |
-| **1.40** | **4.92** | **17.1** | **16.9** |
-| 1.8 | 6.33 | 18.7 | 16.9 |
+| Per-team spread | 14.72 | **11.35** | under 10.25 |
+| Error vs real results | 11.14 | **10.25** | lower is better |
+| League table spread | 17.0 | **16.9** | 16.9 |
+| Coverage | 93% | **88%** | 80% ideal |
+| MAE | 8.5 | **8.2** | |
+| Champion points | 76–88 | **84–91** | 81–102 |
 
-**1.40 is therefore the realistic setting, not a taste choice.** The analytical value is derived in log-goal units and converted to rating points through two different scales and then Dixon-Coles sampling, so it lands short; the empirical calibration closes the gap.
+Prediction accuracy *improved* rather than degrading, because getting the systematic spread right matters more at the extremes than the cost of over-committing.
+
+`FORM_SIGMA`'s multiplier drops from 1.40 to 0.70 as a direct consequence: with the signal no longer compressed, the noise term no longer has to be inflated to hide it. Both components are now roughly right individually, instead of wrong in cancelling directions.
+
+### What it costs: fewer Leicesters
+
+The one real casualty. A team finishing 25+ points above its own expected total:
+
+| | frequency |
+|---|---|
+| deshrink 0 / mult 1.40 | 4.51% of team-seasons |
+| **deshrink 1 / mult 0.70** | **1.40%** |
+
+Roughly three times rarer — about one such season every three or four league-years rather than one most seasons. Leicester 2015/16 remains reachable but is now genuinely exceptional, which is closer to how often football produces one.
+
+Worth being honest about the limit here: the model has no way to represent "this squad is better than its ratings suggest", so the only route to a Leicester is noise. Leicester's real 81 sits far outside their simulated 27–57 range either way — the engine never really explains that season, it can only occasionally stumble into it.
 
 ### Measured versus chosen
 

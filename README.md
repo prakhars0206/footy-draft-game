@@ -141,13 +141,17 @@ So: take a real league-season — say Serie A 2013/14 — find those exact twent
 
 ![Simulated points against real points for 138 clubs](docs/images/validation.png)
 
-**Correlation +0.79**, and match-level behaviour lands within a whisker of reality: 24% draws against a real 25.5%, 2.69 goals per game against 2.72.
+**Correlation +0.79**, and match-level behaviour lands within a whisker of reality: 24.5% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 84–91 points against a real 81–102.
 
 **The dots sit below the diagonal at the extremes, and that needs care, because it's easy to misread.** Juventus's record 102-point season shows a dot at 70 — but that dot is the *average of 200 simulated seasons*, while the x-axis is *one* real season. Those aren't comparable quantities. An average is always less extreme than a single draw, so comparing them manufactures the appearance of under-prediction.
 
 The bars are the honest comparison: the range of seasons the engine actually produces for that squad. **93% of real results fall inside them**, including the record ones. If you play the game you'll see 85- and 90-point champions regularly — the engine produces those seasons, it just doesn't *average* to them.
 
-Two real effects remain underneath. The model explains 63% of the variation in team strength, so its *averages* genuinely are compressed by about √0.63. And 93% coverage against an ideal 80% means the ranges run slightly wide. Those two errors point in opposite directions and largely cancel in the league table — the engine is a little under-confident about which team is better, and a little over-random within a season. Fixing either needs better information about teams, not different constants.
+One real effect remains underneath: the model explains 63% of the variation in team strength, so its *averages* are genuinely compressed by about √0.63.
+
+That used to be worse. Because a regression predicts conditional *means*, its output carries only √R² of the real spread — which made every team look more alike than real teams are, and had to be hidden by cranking up the season-randomness. The result was an engine that was simultaneously under-confident about who was better and over-random within a season: two errors that cancelled in the league table while both being wrong, and which showed up in play as teams swinging further from expectation than felt right.
+
+Multiplying the scales by √R² restores the lost spread, and the randomness can then come back down. It improved everything at once — per-team spread 14.7 → 11.4, prediction error 11.1 → 10.3, league shape still exact. The one cost is that huge over-achievements get about three times rarer: Leicester 2015/16 is still reachable, roughly one such season every three or four league-years, but no longer routine. [TECHNICAL.md](TECHNICAL.md) has the workings.
 
 **Two things this bought beyond accuracy.** It found a real flaw in the original model — attack and defence turn out to respond to squad quality at genuinely different rates, which a single shared constant cannot express. And it forced a separation that should probably exist in any simulation game: measured values live in one file that is never hand-edited, and deliberate design choices live in another. When the game runs calmer than real football, that's now a documented decision with a number attached, rather than a quietly falsified measurement.
 
