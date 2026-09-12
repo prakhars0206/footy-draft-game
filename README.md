@@ -48,16 +48,42 @@ For the full detail — every model, every formula, every decision and why — s
 
 The tension is that you never get to pick freely. The spin decides how strong a squad you're offered, the formation decides which positions you still need, and a club you've already raided never comes back. A great striker is worthless on a turn where you only have a left-back slot open.
 
-A few things that make it more than a random-number generator:
+### 1 · Draft on incomplete information
 
-- **Scout mode** — exact ratings are hidden. You see a smudged confidence band instead, so you're judging players on reputation and position, the way a scout would.
-- **Prime mode** — draft players at their career-best season rather than the one you spun.
-- **Real odds** — before kickoff the game simulates your exact season a thousand times and shows you the distribution. Afterwards it tells you where your actual season landed in it, so "I overperformed" is a percentile, not a feeling.
-- **Call it** — during playback the game pauses at genuine moments (a summit clash, the unbeaten run on the line, a final-day decider) and asks you to predict the result. It's already decided; the question is whether you can read your own team.
-- **The Almanac** — browse every top-5 squad from 2006/07 to 2025/26 and see the best XI the engine would field for them.
+Ratings are hidden by default. You get a **smudged intel band** — `80–88`, `76–81` — plus nationality and the positions a player can fill, so you judge them the way a scout would rather than sorting by a number.
+
+![The draft screen: a pitch with open slots beside a scout dossier showing fuzzy rating bands](docs/images/screen-draft.jpg)
+
+Take one player, and the rest of that squad is declassified afterwards so you can see exactly who you passed on.
+
+### 2 · See real odds before a ball is kicked
+
+Once the XI is complete the game simulates **your exact season a thousand times** and reads the odds straight off the distribution. Not a formula — the same engine that is about to play the real one.
+
+![The pre-season league screen showing a projected 5th place, a points forecast, and title and top-four odds](docs/images/screen-preseason.jpg)
+
+Every other team gets the same treatment, so you can click any of the nineteen and see their squad and their forecast too.
+
+### 3 · Watch it unfold, and call the big moments
+
+Playback runs matchday by matchday with the table reordering live. At genuine turning points it stops and asks you to predict — a banana skin, a summit clash, the unbeaten run on the line.
+
+![Matchday playback paused on a banana-skin prediction, with the season spine above and the live table beside it](docs/images/screen-playback.jpg)
+
+The result is already decided; the question is whether you can read your own team. The ribbon along the top is the **season spine** — every result as a block, with an unbeaten run drawn as a gold thread that frays at the loss.
+
+### 4 · Read the debrief
+
+![The debrief: finished 6th against a projected 5th, with the season spine, record and Player of the Season](docs/images/screen-debrief.jpg)
+
+The verdict is a **percentile**, not an adjective. Finishing on 70 when the projection said 68 isn't "quite good" — it's where that season landed among the thousand the engine had already simulated, so over- and under-performance are measured rather than asserted.
+
+### Also in there
+
+- **Prime mode** — draft players at their career-best season instead of the one you spun. Better players, but it scatters your XI across more eras.
+- **The Almanac** — browse every top-5 squad from 2006/07 to 2025/26 and see the best XI the engine would field for each.
 
 ---
-
 
 ## The interesting part: fitting it to real football
 
