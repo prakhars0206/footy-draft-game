@@ -1,10 +1,10 @@
 # footy-draft
 
-**Spin for a tier. Pick a club. Steal one player. Repeat eleven times, then find out whether your patchwork side can survive a 38-game season.**
+Spin for a tier, pick one of three real club-seasons, take a single player from it. Do that eleven times and you have an XI. Then it plays a 38-game season and you find out how bad your decisions were.
 
-A football draft-and-simulation game built from scratch — every player who appeared in a top-5 European league between FIFA 07 and EA FC 26 is in the pool, so your XI can pair Kaká's 2007 with Haaland's 2025. The season that follows is simulated by a match engine whose constants were **fitted by maximum likelihood to 36,197 real matches**, not tuned by hand until they looked about right.
+Every player from a top-5 European league between FIFA 07 and EA FC 26 is in the pool, so you can end up with Kaká's 2007 alongside Haaland's 2025. The season is run by a match engine whose constants were fitted by maximum likelihood to 36,197 real matches rather than tuned by hand.
 
-Spring Boot + a dependency-free Java engine, a React frontend, and an offline Python pipeline that does the statistics.
+Spring Boot backend with a dependency-free Java engine, React frontend, and an offline Python pipeline for the statistics.
 
 > Just want to run it? `mvn spring-boot:run`, then `cd frontend && npm run dev`. Full setup in [Quick start](#quick-start).
 
@@ -22,7 +22,7 @@ Spring Boot + a dependency-free Java engine, a React frontend, and an offline Py
 | [Running the analysis yourself](#running-the-analysis-yourself) | the Python pipeline |
 | [Status](#status) | what works, what's next |
 
-For the full detail — every model, every formula, every decision and why — see **[TECHNICAL.md](TECHNICAL.md)**. Open defects are tracked in **[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)**.
+[TECHNICAL.md](TECHNICAL.md) has the full detail on every model and decision. Open defects are in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 ---
 
@@ -46,106 +46,106 @@ For the full detail — every model, every formula, every decision and why — s
         watch it unfold matchday by matchday, then read the debrief
 ```
 
-The tension is that you never get to pick freely. The spin decides how strong a squad you're offered, the formation decides which positions you still need, and a club you've already raided never comes back. A great striker is worthless on a turn where you only have a left-back slot open.
+You never get to pick freely, which is the whole point. The spin decides how strong a squad you're offered, your formation decides which positions are still open, and once you've raided a club it won't come back. A great striker is no use on a turn where the only gap left is at left-back.
 
-### 1 · Draft on incomplete information
+### 1. Drafting with the ratings hidden
 
-Ratings are hidden by default. You get a **smudged intel band** — `80–88`, `76–81` — plus nationality and the positions a player can fill, so you judge them the way a scout would rather than sorting by a number.
+By default you don't see exact ratings. You get a range instead (`80–88`, `76–81`), plus nationality and the positions a player can fill, so you're going off reputation and shape rather than sorting by a number.
 
 ![The draft screen: a pitch with open slots beside a scout dossier showing fuzzy rating bands](docs/images/screen-draft.jpg)
 
-Take one player, and the rest of that squad is declassified afterwards so you can see exactly who you passed on.
+After you pick, the rest of that squad is revealed so you can see who you passed on.
 
-### 2 · See real odds before a ball is kicked
+### 2. Odds before a ball is kicked
 
-Once the XI is complete the game simulates **your exact season a thousand times** and reads the odds straight off the distribution. Not a formula — the same engine that is about to play the real one.
+Once the XI is full, the game simulates your exact season a thousand times and reads the odds off the distribution. It's the same engine that's about to play the real one, so the projection and the result can't disagree.
 
 ![The pre-season league screen showing a projected 5th place, a points forecast, and title and top-four odds](docs/images/screen-preseason.jpg)
 
-Every other team gets the same treatment, so you can click any of the nineteen and see their squad and their forecast too.
+Every other team gets the same treatment, so you can click any of the nineteen and see their squad and their forecast.
 
-### 3 · Watch it unfold, and call the big moments
+### 3. Playback, and calling the big moments
 
-Playback runs matchday by matchday with the table reordering live. At genuine turning points it stops and asks you to predict — a banana skin, a summit clash, the unbeaten run on the line.
+The season runs matchday by matchday with the table reordering as it goes. At certain points it stops and asks you to predict what happens next: a top-of-the-table game, an away trip you're expected to win, the unbeaten run on the line.
 
-![Matchday playback paused on a banana-skin prediction, with the season spine above and the live table beside it](docs/images/screen-playback.jpg)
+![Matchday playback paused on a prediction prompt, with the season spine above and the live table beside it](docs/images/screen-playback.jpg)
 
-The result is already decided; the question is whether you can read your own team. The ribbon along the top is the **season spine** — every result as a block, with an unbeaten run drawn as a gold thread that frays at the loss.
+The result is already fixed by the simulation, so it's really a test of whether you can read your own team. The ribbon at the top is the season spine: one block per result, with an unbeaten run drawn as a gold thread that frays when it ends.
 
-### 4 · Read the debrief
+### 4. The debrief
 
 ![The debrief: finished 6th against a projected 5th, with the season spine, record and Player of the Season](docs/images/screen-debrief.jpg)
 
-The verdict is a **percentile**, not an adjective. Finishing on 70 when the projection said 68 isn't "quite good" — it's where that season landed among the thousand the engine had already simulated, so over- and under-performance are measured rather than asserted.
+Over- and under-performance is a percentile rather than a judgement call. Finishing on 70 when the projection said 68 tells you where that season landed among the thousand the engine already simulated.
 
 ### Also in there
 
-- **Prime mode** — draft players at their career-best season instead of the one you spun. Better players, but it scatters your XI across more eras.
+- **Prime mode** — draft players at their career-best season instead of the one you spun. Better players, but your XI ends up spread across more eras.
 - **The Almanac** — browse every top-5 squad from 2006/07 to 2025/26 and see the best XI the engine would field for each.
 
 ---
 
 ## The interesting part: fitting it to real football
 
-A match simulator needs to answer one question: **given these two teams, how many goals?** Everything else is bookkeeping.
+A match simulator has to answer one question: given these two teams, how many goals? Everything else is bookkeeping.
 
-The usual approach is to invent a formula, add some constants, and nudge them until the output looks plausible. That's how this started — six numbers, tuned by running a simulation and squinting at it. It worked, in the sense that nothing looked obviously wrong. But there was no way to know whether the numbers were *right*, and no way to tell whether two wrong values were quietly cancelling out.
+The usual way to do that is to invent a formula, add some constants, and adjust them until the output looks about right. That's how this started, with six numbers tuned by running a simulation and eyeballing it. Nothing looked obviously broken, but there was no way to tell whether the numbers were actually right, or whether two wrong values were cancelling each other out.
 
-So they got measured instead.
+So I measured them instead.
 
 ### Step 1 — get 36,197 real matches
 
-Every top-5 league result from 2006/07 to 2025/26, which is exactly the span the player data covers. One script, about a minute.
+Every top-5 league result from 2006/07 to 2025/26, which is the same span as the player data. One script, about a minute.
 
 ### Step 2 — work out how good each real team actually was
 
-This is the statistics. For every one of 100 league-seasons, we fit a **Dixon-Coles model** — the standard model for football scorelines — which gives each team two numbers: an **attack strength** and a **defence strength**, chosen so they best explain that team's real results.
+For each of 100 league-seasons, fit a **Dixon-Coles model** (the standard model for football scorelines). It gives every team two numbers, an attack strength and a defence strength, picked so they best explain that team's real results.
 
-"Best explain" has a precise meaning. For any set of numbers you propose, you can compute how *likely* the real season was under them: Arsenal beat Spurs 3–1, what probability does this model assign to exactly 3–1? Multiply that across every match and you get one score for the whole set. **Maximum likelihood estimation** is just searching for the set that scores highest. A computer does the searching.
+"Best explain" has a specific meaning here. Given any set of numbers you can work out how likely the real season was under them: Arsenal beat Spurs 3–1, what probability does the model give that exact score? Do that for every match and combine, and you get a single score for the whole set. Maximum likelihood estimation is just the search for the set that scores highest, and a computer does the searching.
 
-These strengths aren't an abstraction — they track reality closely:
+The strengths that come out line up with reality:
 
 ![Fitted attack strength against goals actually scored](docs/images/alpha-vs-goals.png)
 
-### Step 3 — the validation nobody asked for
+### Step 3 — a check before trusting any of it
 
-Before trusting any of it, a check: home advantage is known to have declined in real football over the last two decades. If the data shows that unprompted, the pipeline is probably sound.
+Home advantage is known to have declined in real football over the last twenty years. If the data shows that without being asked, the pipeline is probably sound.
 
 ![Home advantage declining from 2006 to 2025](docs/images/home-advantage.png)
 
-It does — and the sharpest dip is 2020/21, the season played in empty stadiums. Nobody told the model about COVID.
+It does, and the biggest dip is 2020/21, the season played in empty stadiums.
 
 ### Step 4 — connect it to the game
 
-Now the bridge. We know how good each real team *was*. We also know what the engine *thinks* of that same squad, because those clubs are in the player data. Plot one against the other, fit a line, and the slope of that line **is** the engine's scale constant.
+Now the bridge. We know how good each real team was, and we know what the engine thinks of the same squad because those clubs are in the player data. Plot one against the other, fit a line, and the slope of that line is the engine's scale constant.
 
 ![The bridge: squad rating plotted against fitted team strength](docs/images/bridge-fit.png)
 
-No more guessing how an 85-rated squad converts into goals. It's measured across 1,952 club-seasons.
+So there's no more guessing at how an 85-rated squad turns into goals. It's measured across 1,952 club-seasons.
 
-The result, with the old hand-tuned values for comparison:
+Here's where the constants ended up against the old hand-tuned ones:
 
 ![Hand-tuned constants versus fitted ones](docs/images/constants.png)
 
-The one that barely moved is a small vindication of the original guesswork; the two that moved a lot were genuinely wrong.
+The one that barely moved suggests the original guess was fine. The two that moved a long way were wrong.
 
 ### Step 5 — does it actually work?
 
-The honest test is not "does the simulation look plausible" but "does it reproduce seasons that really happened".
+The test that matters isn't whether the simulation looks plausible, it's whether it reproduces seasons that really happened.
 
-So: take a real league-season — say Serie A 2013/14 — find those exact twenty clubs in the player data, field each one's best XI, and simulate that league 200 times. Then compare to the table that actually happened. Seven league-seasons, 138 clubs.
+So: take a real league-season, say Serie A 2013/14, find those twenty clubs in the player data, field each one's best XI, and simulate that league 200 times. Then compare against the table that actually happened. Seven league-seasons, 138 clubs.
 
 ![Simulated points against real points for 138 clubs](docs/images/validation.png)
 
-**Correlation +0.79**, and match-level behaviour lands within a whisker of reality: 24.5% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 84–91 points against a real 81–102.
+Correlation is **+0.79**, and the match-level numbers land close to reality: 24.5% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 84–91 points where real ones finished on 81–102.
 
-**The dots sit below the diagonal at the extremes, and that's easy to misread.** Juventus's record 102-point season shows a dot at 75 — but that dot is the *average of 200 simulated seasons*, while the x-axis is *one* real season. An average is always less extreme than a single draw, so comparing them manufactures the appearance of under-prediction.
+The dots sitting below the diagonal at the extremes are easy to misread. Juventus's record 102-point season shows a dot at 75, but that dot is the average of 200 simulated seasons while the x-axis is one real season. An average is always less extreme than a single result, so comparing the two makes it look like the model is under-predicting when it isn't.
 
-The bars are the fair comparison: the range of seasons the engine actually produces. **88% of real results land inside them.** Play the game and you'll see 85- and 90-point champions regularly — the engine produces those seasons, it just doesn't *average* to them.
+The bars are the fair comparison, since they show the range of seasons the engine actually produces. 88% of real results land inside them. Play the game and 85- and 90-point champions turn up regularly; the engine produces those seasons, it just doesn't average to them.
 
-What remains underneath is a real limit: squad ratings explain 63% of the variation in team strength, so the model's averages stay somewhat compressed no matter what. Getting that far took one non-obvious correction — a regression predicts *means*, which carry only √R² of the real spread, and left uncorrected that made every team look more alike than real teams are. [TECHNICAL.md](TECHNICAL.md) has the workings and the numbers.
+There is a real limit underneath all that: squad ratings only explain 63% of the variation in team strength, so the model's averages stay somewhat compressed. Getting that far needed one correction that wasn't obvious, since a regression predicts means and means carry only √R² of the real spread, which left every team looking more alike than real teams are. [TECHNICAL.md](TECHNICAL.md) has the working.
 
-**Two things this bought beyond accuracy.** It found a real flaw in the original model — attack and defence turn out to respond to squad quality at genuinely different rates, which a single shared constant cannot express. And it forced a separation that should probably exist in any simulation game: measured values live in one file that is never hand-edited, and deliberate design choices live in another. When the game runs calmer than real football, that's now a documented decision with a number attached, rather than a quietly falsified measurement.
+Two things came out of this beyond the accuracy. It exposed a flaw in the original model, since attack and defence turn out to respond to squad quality at different rates and one shared constant can't express that. And it forced a split that probably belongs in any simulation game: measured values live in a file that never gets hand-edited, and deliberate design choices live in a separate one. When the game runs calmer than real football, that's now a decision with a number attached to it.
 
 ---
 
@@ -193,13 +193,13 @@ flowchart TB
     EX --> UI
 ```
 
-The engine deliberately has **no Spring imports**. It's plain Java that can be compiled with `javac` and run on its own, which keeps it testable and keeps the simulation honest about what it depends on.
+The engine has no Spring imports. It's plain Java you can compile with `javac` and run on its own, which keeps it easy to test and honest about its dependencies.
 
 ---
 
 ## Quick start
 
-You need **Java 17+** and **Maven**. The player data (`*.csv`) is git-ignored — the app boots fine without it, just with an empty pool, so drop your FIFA exports into `data/` first.
+You need Java 17+ and Maven. The player CSVs are git-ignored, and the app boots fine without them (just with an empty pool), so put your FIFA exports in `data/` first.
 
 ```bash
 mvn spring-boot:run          # API on http://localhost:8080
@@ -215,13 +215,13 @@ curl "localhost:8080/api/season/demo?overall=90&formation=4-3-3&seed=42"
 python3 scripts/smoke_test.py
 ```
 
-For the actual game, run the frontend too:
+For the game itself you also need the frontend:
 
 ```bash
 cd frontend && npm install && npm run dev     # http://localhost:5173
 ```
 
-There's also a no-Maven path for the engine alone, which is handy when you only want to watch the simulation work:
+There's a no-Maven path for the engine on its own, useful if you just want to watch the simulation run:
 
 ```bash
 javac -d out src/main/java/com/draft/footy/*.java
@@ -259,7 +259,7 @@ data/                         player CSVs + historical results (git-ignored)
 
 ## Running the analysis yourself
 
-The Python side never runs during the game. It produces one file — `src/main/resources/calibration.properties` — which Java reads at startup.
+None of this runs during the game. It produces one file, `src/main/resources/calibration.properties`, which Java reads at startup.
 
 ```bash
 python3 -m venv analysis/calibration/.venv
@@ -276,13 +276,13 @@ $V analysis/calibration/make_plots.py                  # → docs/images/
 java -cp target/classes com.draft.footy.HistoricalValidation   # does it hold up?
 ```
 
-Each script explains itself if you read the top of the file, and prints its own sanity checks as it goes.
+Each script has an explanation at the top of the file and prints its own sanity checks as it runs.
 
 ---
 
 ## Status
 
-**Working end to end.** Draft, simulate, watch it play out, read the debrief. Browse the Almanac.
+Working end to end: draft, simulate, watch it play out, read the debrief, browse the Almanac.
 
 | | |
 |---|---|
@@ -303,4 +303,4 @@ Longer term, the calibration work opens two doors: a **drafting agent** trained 
 
 ## Notes
 
-Personal and educational. The 38-0 concept is the inspiration; the code, model and interface are original. Player data comes from public FIFA/sofifa exports and is not redistributed here — match results are from [football-data.co.uk](https://www.football-data.co.uk/).
+Personal and educational project. The 38-0 concept is the inspiration; the code, model and interface are my own. Player data comes from public FIFA/sofifa exports and isn't redistributed here. Match results are from [football-data.co.uk](https://www.football-data.co.uk/).
