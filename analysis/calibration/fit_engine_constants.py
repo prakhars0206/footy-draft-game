@@ -98,7 +98,15 @@ def decompose_form(rows, resid, noise_var, scale, label):
 
 
 def main() -> int:
+    import sys
     rows = load_joined()
+    if "--holdout" in sys.argv:
+        HELD = {("Premier League", "2017/18"), ("Premier League", "2015/16"),
+                ("Premier League", "2007/08"), ("La Liga", "2011/12"),
+                ("Serie A", "2013/14"), ("Bundesliga", "2012/13"), ("Ligue 1", "2015/16")}
+        before = len(rows)
+        rows = [r for r in rows if (r["league"], r["season"]) not in HELD]
+        print(f"HOLDOUT: dropped {before - len(rows)} club-seasons from the bridge regression\n")
     gp = json.loads((DATA / "global_params.json").read_text())
     gamma, rho = gp["gamma"], gp["rho"]
 

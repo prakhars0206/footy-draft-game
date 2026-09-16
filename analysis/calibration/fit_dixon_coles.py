@@ -252,10 +252,19 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--league", action="append", choices=sorted(LEAGUE_NAME))
     ap.add_argument("--maxiter", type=int, default=25, help="max outer coordinate-descent sweeps")
+    ap.add_argument("--holdout", action="store_true",
+                    help="exclude the HistoricalValidation league-seasons, so their constants are out-of-sample")
     args = ap.parse_args()
 
     leagues = args.league or sorted(LEAGUE_NAME)
     fixtures = load_fixtures(leagues)
+    if args.holdout:
+        HELD = {("Premier League", "2017/18"), ("Premier League", "2015/16"),
+                ("Premier League", "2007/08"), ("La Liga", "2011/12"),
+                ("Serie A", "2013/14"), ("Bundesliga", "2012/13"), ("Ligue 1", "2015/16")}
+        before = len(fixtures)
+        fixtures = {k: v for k, v in fixtures.items() if k not in HELD}
+        print(f"HOLDOUT: dropped {before - len(fixtures)} league-seasons from the fit")
     blocks = build_blocks(fixtures)
     n_matches = sum(len(b["hg"]) for b in blocks)
     n_params = 2 + sum(2 * b["n_teams"] - 1 for b in blocks)

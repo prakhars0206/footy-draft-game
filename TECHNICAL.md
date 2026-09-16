@@ -345,6 +345,8 @@ Three of those are worth reading twice:
 
 Fit quality: Spearman correlation between fitted strength and actual league points averages **0.944** across the 100 league-seasons.
 
+> **Read that number correctly — it is circular.** `α` and `β` were estimated *from* those same results, so a high rank correlation with the resulting table is close to guaranteed. It is a check that the optimiser converged on something sensible, not evidence the model predicts anything. The only non-circular evidence in this document is §7, and even that needed a holdout to be sure.
+
 Four findings needed more than a number.
 
 ### Finding 1: attack and defence don't share a sensitivity
@@ -442,16 +444,41 @@ Plotted as means, champions look systematically under-predicted: Juventus's 102 
 
 **Most of that is an artifact of comparing an average to a single draw.** The real table is one realisation, including whatever luck that season contained; the mean of 200 simulations is an expectation. An expectation is less extreme than a draw by construction, so plotting one against the other manufactures apparent under-prediction even for a perfect model.
 
-The coverage figure is the fair test: **93% of real results fall inside the simulated p10–p90 range**, record seasons included. The engine does produce 90-point champions — it just doesn't *average* to them, and neither does real football.
+The coverage figure is the fair test: **88% of real results fall inside the simulated p10–p90 range**, record seasons included. The engine does produce 90-point champions — it just doesn't *average* to them, and neither does real football.
 
 Two genuine effects remain once that's accounted for:
 
 - **The conditional means are compressed.** A predictor explaining R² of the variance produces predictions with √R² of the spread, always. At R² = 0.63 that's 0.79×.
-- **The ranges are slightly too wide.** 93% coverage against an ideal 80% means the per-team spread is over-dispersed.
+- **The ranges are still slightly wide.** 88% coverage against an ideal 80% means the per-team spread remains a little over-dispersed, though far less than the 93% it was before de-shrinking.
 
-These point in opposite directions and largely cancel in the league table, which is why the table *shape* matches (spread sd 17.1 against a real 16.9) while both components are individually off. Stated plainly: **the engine is a little under-confident about which team is better, and a little over-random within a season.**
+These point in opposite directions, which is why the table *shape* matches (spread sd 16.9 against a real 16.9). Stated plainly: **the engine is a little under-confident about which team is better, and a little over-random within a season.**
 
 That cancellation is a consequence of how `FORM_SIGMA` was calibrated — tuned so total table spread matches reality, which necessarily inflates the noise term to compensate for a compressed systematic term.
+
+### Is this validation in-sample?
+
+Yes, technically, and it's the first thing a reviewer should ask. The seven league-seasons sit inside the 36,197 matches used to fit `γ` and `ρ`, and their 138 clubs sit inside the 1,952 used for the bridge regression. So the constants have seen these results.
+
+The question is how much that matters, and it's cheap to measure rather than argue about. Both fit scripts take `--holdout`, which drops those seven league-seasons entirely and refits. The constants that come out are genuinely out-of-sample for them:
+
+| | correlation | MAE | coverage |
+|---|---|---|---|
+| In-sample (shipped constants) | +0.794 | 8.2 | 88% |
+| **Out-of-sample** (7 seasons held out, refit) | **+0.794** | **8.2** | **89%** |
+
+The constants barely move either (`SCALE_ATTACK` 20.05 → 20.23, `γ` 0.2579 → 0.2559, `BASE_GOALS` 1.1007 → 1.1033).
+
+The reason is capacity, not luck. **Six global parameters fitted on 36,197 matches cannot memorise seven seasons.** Those seasons are ~7% of the data, and there is nowhere for a per-season result to hide in a handful of scalars. Leakage matters when a model has enough parameters to fit individual observations; this one has six.
+
+Reproduce it with:
+
+```bash
+.venv/bin/python analysis/calibration/fit_dixon_coles.py --holdout
+.venv/bin/python analysis/calibration/fit_engine_constants.py --holdout
+java -cp target/classes com.draft.footy.HistoricalValidation
+```
+
+**What this does not establish.** It shows the validation isn't inflated by leakage. It does not show the model is *good* in absolute terms, because there's no external benchmark to compare against. That needs walk-forward evaluation against de-vigged bookmaker closing odds, scored with log loss and RPS — the odds are already in the downloaded files, and it's the top item in [§15](#what-would-move-the-needle). Expect to lose to the closing line; the useful result is by how much, and where.
 
 ### De-shrinking: fixing both errors instead of cancelling them
 
@@ -518,7 +545,7 @@ Overloading one number with both jobs means quietly falsifying a measurement, af
 | `calibration.properties` | `Calibration` | measured; **never** hand-edited; regenerated by the pipeline |
 | `game-balance.properties` | `GameBalance` | chosen; hand-edited freely; every value carries a written reason |
 
-This makes the honest statement available: *"real football has FORM_SIGMA ≈ 3.52; below a 1.40 multiplier the game is deliberately calmer than reality so draft quality stays legible."*
+This makes the honest statement available: *"real football has FORM_SIGMA ≈ 3.52; the game runs at a 0.70 multiplier, and below that it is deliberately calmer than reality so draft quality stays legible."*
 
 ---
 
@@ -700,6 +727,8 @@ Stated plainly, because most of them are informative.
 **FIFA 07–10 players have only one position each** — a scraping gap, not a fact about football. It makes ~20% of the pool harder to field and, in four of seven formations, undraftable. Written up with candidate fixes in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 **Runs are in-memory** and vanish on restart.
+
+**There is no external benchmark.** Every number in §7 says the engine is internally consistent and reproduces real tables; none of it says the engine is *good* compared to anything else. Until it's scored against de-vigged bookmaker odds out of sample, "correlation +0.79" has no reference point.
 
 ### What would move the needle
 
