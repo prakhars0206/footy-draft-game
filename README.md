@@ -137,11 +137,13 @@ So: take a real league-season, say Serie A 2013/14, find those twenty clubs in t
 
 ![Simulated points against real points for 138 clubs](docs/images/validation.png)
 
-Correlation is **+0.79**, and the match-level numbers land close to reality: 24.5% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 84–91 points where real ones finished on 81–102.
+Correlation is **+0.79**, and the match-level numbers land close to reality: 24.6% draws against a real 25.5%, 2.69 goals per game against 2.72. Simulated champions finish on 78–91 points where the real ones finished on 81–102 (the low end of both is the Bundesliga, which plays 34 games rather than 38).
 
 The dots sitting below the diagonal at the extremes are easy to misread. Juventus's record 102-point season shows a dot at 75, but that dot is the average of 200 simulated seasons while the x-axis is one real season. An average is always less extreme than a single result, so comparing the two makes it look like the model is under-predicting when it isn't.
 
 The bars are the fair comparison, since they show the range of seasons the engine actually produces. 88% of real results land inside them. Play the game and 85- and 90-point champions turn up regularly; the engine produces those seasons, it just doesn't average to them.
+
+Those seven seasons are inside the data the constants were fitted on, so that's an obvious thing to be suspicious of. Holding them out and refitting moves the correlation and the mean error by nothing at all, which makes sense: six global parameters fitted on 36,197 matches have nowhere to hide seven seasons. The numbers are in [TECHNICAL.md](TECHNICAL.md).
 
 There is a real limit underneath all that: squad ratings only explain 63% of the variation in team strength, so the model's averages stay somewhat compressed. Getting that far needed one correction that wasn't obvious, since a regression predicts means and means carry only √R² of the real spread, which left every team looking more alike than real teams are. [TECHNICAL.md](TECHNICAL.md) has the working.
 
