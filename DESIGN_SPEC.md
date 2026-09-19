@@ -8,7 +8,7 @@
 
 - Rebuild the core 38-0 experience from scratch, with original code and a distinct UI.
 - Add two headline features: **top-5 European leagues** (not just the Premier League) and a **fuzzy/"scout" ratings mode** (a middle ground between fully visible and fully hidden ratings).
-- Use the build as **Spring Boot / Java practice** aligned with the upcoming BlackRock role and Java certification, plus a couple of **LLM-in-the-loop integration points** that map to the "AI integration" brief.
+- Use the build as **Spring Boot / Java practice**, plus a couple of **LLM-in-the-loop integration points**.
 - Personal use only, not distributed.
 
 ---
@@ -17,7 +17,7 @@
 
 | Layer | Choice | Why |
 |---|---|---|
-| Backend | **Java + Spring Boot REST API** | Owns player data, draft/spin logic, and the simulation engine. This is the cert-relevant surface: controllers, service layer, DTOs, DI, JPA if we persist runs. |
+| Backend | **Java + Spring Boot REST API** | Owns player data, draft/spin logic, and the simulation engine: controllers, service layer, DTOs, DI, JPA if we persist runs. |
 | Sim engine | Plain Java service class | Self-contained, unit-testable business logic — the most interesting and most testable piece. |
 | Frontend | **React (separate SPA)** — *decided* | Consumes the API over HTTP. Chosen over Thymeleaf+HTMX deliberately: the decoupled REST API + SPA split is the more transferable enterprise architecture. |
 | Data | FIFA/EA ratings (sofifa-lineage) + AI-generated legends | See §4. |
@@ -229,7 +229,7 @@ Distinct identity (not a recolor of the original's slot machine). Concept: **sco
 
 ---
 
-## 10. AI Integration Points (BlackRock angle)
+## 10. AI Integration Points
 
 Two clean LLM-in-the-loop hooks, both via the Claude API:
 
@@ -260,10 +260,10 @@ Mirrors the richness of the original: full match log with scorelines + goalscore
 
 ---
 
-## 13. Learning Objectives (cert mapping)
+## 13. Learning Objectives
 
 - **Spring Boot / Java:** REST controllers, service layer, DTOs, dependency injection, (optional) JPA persistence, unit + integration testing of the sim engine.
-- **AI integration:** structured-output prompting, LLM-in-the-loop ETL, runtime LLM calls — directly relevant to the BlackRock AI-integration brief.
+- **AI integration:** structured-output prompting, LLM-in-the-loop ETL, runtime LLM calls.
 
 ---
 
@@ -294,7 +294,7 @@ Memory across chats is **partial and delayed**, and if the build happens inside 
 Validated technical points to build in from the start:
 
 - **Scout-mode DTO must strip `true_rating`.** Backend computes the range; the payload sent to React contains only the displayed range/string, never the true number (else DevTools reveals it). Derive the range **deterministically from `(playerId, runSeed)`** so it's stable across requests without server storage — ties into the seeded RNG. *(Low real stakes for a personal build, but the correct API pattern.)*
-- **Seed DB via Spring Data JPA, not in-memory.** Parse the CSVs once → seed an embedded **H2** (or local Postgres) → query via repositories (`findByLeagueNameAndSeason`, etc.). *Reason is cert practice, not performance* — the dataset (~29k rows filtered to top-5/level-1) is small and would fit in memory fine; JPA is the point.
+- **Seed DB via Spring Data JPA, not in-memory.** Parse the CSVs once → seed an embedded **H2** (or local Postgres) → query via repositories (`findByLeagueNameAndSeason`, etc.). *The reason is to exercise the persistence layer, not performance* — the dataset (~29k rows filtered to top-5/level-1) is small and would fit in memory fine; JPA is the point.
 - **Draft state = a persisted `DraftRun` resource.** Server-authoritative, keyed by `runId`; client holds only the id and calls `/api/runs/{id}/spin` etc. This is proper REST (a run-in-progress *is* a resource), and it's what powers **Continue Draft** (§5B) and seed-replay. Avoids trusting client-held reroll counts.
 - **Poisson under-predicts draws → Dixon-Coles.** Pure independent Poisson produces too few 0-0/1-1 draws (scorelines are correlated). Ship raw Poisson for v1; add the low-score (Dixon-Coles) correction during tuning.
 - **The 38-0 calibration target.** Rarity *is* the product — tune for "rare but real for a 90+ draft" (a few % per attempt), not "achievable." Levers in order: (1) steep strength→λ curve at the top end; (2) a modest variance-reducer only for severe strength mismatches; (3) calibrate Layer-2 per-game win probabilities so the simulated average lands near the Layer-1 projection (a 90-rated team ≈ 95 pts). This anchors the engine and prevents "everyone finishes on 110 or 60 points" drift.

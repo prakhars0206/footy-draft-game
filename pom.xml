@@ -26,7 +26,8 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <!-- Phase 1b: JPA + H2 seeding (DESIGN_SPEC §16) — cert practice, not perf. -->
+        <!-- Phase 1b: JPA + H2 seeding (DESIGN_SPEC §16). The dataset fits in memory; the point is
+             to exercise the persistence layer, not performance. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>

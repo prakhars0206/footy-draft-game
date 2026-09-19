@@ -23,3 +23,4 @@ __pycache__/
 
 # Local-only working notes (kept on disk, not in the repo)
 CODEBASE_GUIDE.md
+CLAUDE.md
