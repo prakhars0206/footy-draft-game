@@ -16,3 +16,10 @@ out/
 
 # Aider tool artifacts
 .aider*
+
+# Python venv for the offline calibration pipeline
+.venv/
+__pycache__/
+
+# Local-only working notes (kept on disk, not in the repo)
+CODEBASE_GUIDE.md

@@ -1,0 +1,8 @@
+# Offline calibration pipeline only — the game never runs Python.
+# Set up:  python3 -m venv analysis/calibration/.venv
+#          analysis/calibration/.venv/bin/pip install -r analysis/calibration/requirements.txt
+numpy>=1.26
+scipy>=1.11          # L-BFGS-B optimiser for the Dixon-Coles MLE (M3)
+pandas>=2.1
+scikit-learn>=1.3    # ridge regression + season-wise cross-validation (M4)
+matplotlib>=3.8      # diagnostic plots

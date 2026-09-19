@@ -127,10 +127,23 @@ public final class TierReport {
     private static String csvSafe(String s) { return s.replace(",", ";"); }
 
     /** Load the full pool with NO era offset (raw sofifa overalls), deduping by season as DataSeeder does. */
+    /** The pool with era-normalisation SUPPRESSED — raw sofifa ratings, for comparing offset schemes. */
     static List<ClubSeason> loadRaw() throws IOException {
         IntBinaryOperator saved = FifaDataLoader.eraOffsetFn;
         FifaDataLoader.eraOffsetFn = (e, o) -> 0;
         try {
+            return loadPool();
+        } finally {
+            FifaDataLoader.eraOffsetFn = saved;
+        }
+    }
+
+    /**
+     * The pool exactly as the game sees it — era-normalisation applied, season-level dedup (earlier file wins),
+     * missing files skipped. Shared by the analysis tools so they all read the same {@code SPECS} list.
+     */
+    static List<ClubSeason> loadPool() throws IOException {
+        {
             List<ClubSeason> out = new ArrayList<>();
             Set<String> seenSeasons = new HashSet<>(); // earlier file wins a whole season, exactly like DataSeeder
             for (String spec : SPECS) {
@@ -149,8 +162,6 @@ public final class TierReport {
                 fresh.forEach(c -> seenSeasons.add(c.season));
             }
             return out;
-        } finally {
-            FifaDataLoader.eraOffsetFn = saved;
         }
     }
 }
