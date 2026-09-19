@@ -46,7 +46,7 @@ Spring Boot backend with a dependency-free Java engine, React frontend, and an o
         watch it unfold matchday by matchday, then read the debrief
 ```
 
-You never get to pick freely, which is the whole point. The spin decides how strong a squad you're offered, your formation decides which positions are still open, and once you've raided a club it won't come back. A great striker is no use on a turn where the only gap left is at left-back.
+The constraint is that you never get to pick freely: the spin decides how strong a squad you're offered, your formation decides which positions are still open, and once you've raided a club it won't come back. A great striker is no use on a turn where the only gap left is at left-back.
 
 ### 1. Drafting with the ratings hidden
 
@@ -87,15 +87,13 @@ Over- and under-performance is a percentile rather than a judgement call. Finish
 
 ## The interesting part: fitting it to real football
 
-A match simulator has to answer one question: given these two teams, how many goals? Everything else is bookkeeping.
+A match simulator really only has to answer one question — given these two teams, how many goals — and most of the rest is bookkeeping.
 
-The usual way to do that is to invent a formula, add some constants, and adjust them until the output looks about right. That's how this started, with six numbers tuned by running a simulation and eyeballing it. Nothing looked obviously broken, but there was no way to tell whether the numbers were actually right, or whether two wrong values were cancelling each other out.
-
-So I measured them instead.
+The usual way to do that is to invent a formula, add some constants, and adjust them until the output looks about right. That's how this started, with six numbers tuned by running a simulation and eyeballing it. Nothing looked obviously broken, but there was no way to tell whether the numbers were right, or whether two wrong values were quietly cancelling out. Measuring them against real results turned out to be tractable, and that's what the rest of this section covers.
 
 ### Step 1 — get 36,197 real matches
 
-Every top-5 league result from 2006/07 to 2025/26, which is the same span as the player data. One script, about a minute.
+Every top-5 league result from 2006/07 to 2025/26, which is the same span the player data covers. One script pulls the lot down in about a minute.
 
 ### Step 2 — work out how good each real team actually was
 
@@ -109,31 +107,27 @@ The strengths that come out line up with reality:
 
 ### Step 3 — a check before trusting any of it
 
-Home advantage is known to have declined in real football over the last twenty years. If the data shows that without being asked, the pipeline is probably sound.
+Home advantage has declined in real football over the last twenty years, which makes it a useful thing to check against. It turns up in the fitted data without anyone asking for it, including a sharp drop in 2020/21 when games were played in empty stadiums.
 
 ![Home advantage declining from 2006 to 2025](docs/images/home-advantage.png)
 
-It does, and the biggest dip is 2020/21, the season played in empty stadiums.
-
 ### Step 4 — connect it to the game
 
-Now the bridge. We know how good each real team was, and we know what the engine thinks of the same squad because those clubs are in the player data. Plot one against the other, fit a line, and the slope of that line is the engine's scale constant.
+The bridge between the two is fairly direct. The fit says how good each real team was, and the engine has its own opinion of that same squad because those clubs are in the player data, so plotting one against the other and fitting a line gives the engine's scale constant as the slope.
 
 ![The bridge: squad rating plotted against fitted team strength](docs/images/bridge-fit.png)
 
-So there's no more guessing at how an 85-rated squad turns into goals. It's measured across 1,952 club-seasons.
+That gives a measured answer to how an 85-rated squad turns into goals, across 1,952 club-seasons, instead of a guessed one.
 
 Here's where the constants ended up against the old hand-tuned ones:
 
 ![Hand-tuned constants versus fitted ones](docs/images/constants.png)
 
-The one that barely moved suggests the original guess was fine. The two that moved a long way were wrong.
+`BASE_GOALS` barely shifted, so the original guess there was close enough; the two scales moved a long way, which means they had been wrong.
 
 ### Step 5 — does it actually work?
 
-The test that matters isn't whether the simulation looks plausible, it's whether it reproduces seasons that really happened.
-
-So: take a real league-season, say Serie A 2013/14, find those twenty clubs in the player data, field each one's best XI, and simulate that league 200 times. Then compare against the table that actually happened. Seven league-seasons, 138 clubs.
+A simulation looking plausible doesn't tell you much on its own, so the test that counts is whether it reproduces seasons that really happened. The setup is to take a real league-season — Serie A 2013/14, say — find those twenty clubs in the player data, field each one's best XI, simulate the league 200 times, and compare against the table that actually happened. Seven league-seasons in total, 138 clubs.
 
 ![Simulated points against real points for 138 clubs](docs/images/validation.png)
 
@@ -147,7 +141,7 @@ Those seven seasons are inside the data the constants were fitted on, so that's 
 
 There is a real limit underneath all that: squad ratings only explain 63% of the variation in team strength, so the model's averages stay somewhat compressed. Getting that far needed one correction that wasn't obvious, since a regression predicts means and means carry only √R² of the real spread, which left every team looking more alike than real teams are. [TECHNICAL.md](TECHNICAL.md) has the working.
 
-Two things came out of this beyond the accuracy. It exposed a flaw in the original model, since attack and defence turn out to respond to squad quality at different rates and one shared constant can't express that. And it forced a split that probably belongs in any simulation game: measured values live in a file that never gets hand-edited, and deliberate design choices live in a separate one. When the game runs calmer than real football, that's now a decision with a number attached to it.
+Accuracy aside, the exercise turned up a couple of unexpected things. It exposed a flaw in the original model, because attack and defence respond to squad quality at noticeably different rates and one shared constant can't express that. It also forced a split that probably belongs in any simulation game, where measured values live in a file that never gets hand-edited and deliberate design choices live in a separate one. So when the game runs calmer than real football, that's a decision with a number attached to it, not a constant quietly bent to suit.
 
 ---
 
@@ -305,4 +299,4 @@ Longer term, the calibration work opens two doors: a **drafting agent** trained 
 
 ## Notes
 
-Personal and educational project. The 38-0 concept is the inspiration; the code, model and interface are my own. Player data comes from public FIFA/sofifa exports and isn't redistributed here. Match results are from [football-data.co.uk](https://www.football-data.co.uk/).
+Personal and educational project. The 38-0 concept is the inspiration; the code, model and interface are original. Player data comes from public FIFA/sofifa exports and isn't redistributed here. Match results are from [football-data.co.uk](https://www.football-data.co.uk/).
