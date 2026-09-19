@@ -198,8 +198,12 @@ The engine has no Spring imports. It's plain Java you can compile with `javac` a
 You need Java 17+ and Maven. The player CSVs are git-ignored, and the app boots fine without them (just with an empty pool), so put your FIFA exports in `data/` first.
 
 ```bash
-mvn spring-boot:run          # API on http://localhost:8080
+mvn spring-boot:run                                    # API on http://localhost:8080
+mvn spring-boot:run -Dspring-boot.run.profiles=dev     # ...plus the H2 console at /h2-console
 ```
+
+The H2 console is a full web SQL client over the seeded database, so it's off unless the `dev`
+profile is active.
 
 Then in another terminal:
 

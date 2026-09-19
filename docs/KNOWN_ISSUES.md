@@ -74,6 +74,15 @@ The opponent league is built from the full club pool, so a "Modern '16+" run sti
 
 ---
 
-## 3. Runs do not survive a restart
+## 3. Spring Boot 3.3.4 is two years old
+
+Released September 2024. Nothing here is exploitable as a local dev app, but the framework and its
+transitive dependencies will have accumulated advisories since, and this should be bumped before
+anything is deployed to a public host. Bumping the parent version is a one-line change; the risk is
+in the test surface, so do it as its own commit and run the full suite.
+
+---
+
+## 4. Runs do not survive a restart
 
 H2 is `mem:` with `create-drop`. Switching to `jdbc:h2:file:` is not a free swap — Hibernate's schema management needs handling too.

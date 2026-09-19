@@ -15,7 +15,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/explore")
-@CrossOrigin
 public class ExploreController {
 
     private final GameCatalog catalog;

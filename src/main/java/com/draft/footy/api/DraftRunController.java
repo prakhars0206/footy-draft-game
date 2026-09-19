@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/runs")
-@CrossOrigin
 public class DraftRunController {
 
     private final DraftRunService service;
